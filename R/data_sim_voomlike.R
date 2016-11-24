@@ -11,12 +11,14 @@
 #'\dontrun{
 #'set.seed(123)
 #'data_sims <- data_sim_voomlike(maxGSsize=300)
+#'data_sims <- data_sim_voomlike(maxGSsize=300, beta=1.8)
 #'}
 #'@keywords internal
 #'@importFrom utils data
 #'@importFrom stats cor rchisq rgamma rnorm rpois model.matrix runif
 #'@export
-data_sim_voomlike <- function(seed=NULL, maxGSsize=400, minGSsize=30){
+data_sim_voomlike <- function(seed=NULL, maxGSsize=400, minGSsize=30, beta=0, do_gs=TRUE,
+                              longitudinal=TRUE, mixed_hypothesis=FALSE){
 
 
   ############################################################################
@@ -31,13 +33,13 @@ data_sim_voomlike <- function(seed=NULL, maxGSsize=400, minGSsize=30){
   baselineprop <- baselineprop/sum(baselineprop)
 
   # Design ----
-  n <- 18
+  n <- 18#128
   n1 <- n/2
   n2 <- n1
-  nindiv <- 6
+  nindiv <- 6#32
   ngroup <- 2
-  ntime <- 3
-  group <- factor(rep(1:2, each=n/ngroup))
+  ntime <- 3#4
+  group <- rep(0:1, each=n/ngroup)
   indiv <- factor(rep(1:nindiv, each=n/nindiv))
   time <- rep(1:ntime, nindiv)
   design <- stats::model.matrix(~ group + time)
@@ -68,50 +70,82 @@ data_sim_voomlike <- function(seed=NULL, maxGSsize=400, minGSsize=30){
   mu0.1 <- matrix(baselineprop1,ngenes,1) %*% matrix(expected.lib.size[1:n1],1,n1)
   mu0.2 <- matrix(baselineprop2,ngenes,1) %*% matrix(expected.lib.size[(n1+1):(n1+n2)],1,n2)
   mu0 <- cbind(mu0.1,mu0.2)
-  status <- rep(0,ngenes)
-  status[i1] <- -1
-  status[i2] <- 1
 
   # Biological variation ----
+  mu0_null <- mu0
+  if(longitudinal){
+    mu0 <- exp(log(mu0) + matrix(beta*time, ncol=n, nrow=ngenes))
+  }else{
+    mu0 <- exp(log(mu0) + matrix(beta*group, ncol=n, nrow=ngenes))
+  }
+
   BCV0 <- 0.2+1/sqrt(mu0)
+  BCV0_null <- 0.2+1/sqrt(mu0_null)
+
 
   # Use inverse chi-square or log-normal dispersion
   invChisq <- TRUE
 
   if(invChisq){
     df.BCV <- 40
-    BCV <- BCV0*sqrt(df.BCV/stats::rchisq(ngenes ,df=df.BCV))
+    BCV_null <- BCV0_null*sqrt(df.BCV/stats::rchisq(ngenes, df=df.BCV))
+    BCV <- BCV0*sqrt(df.BCV/stats::rchisq(ngenes, df=df.BCV))
   } else {
-    BCV <- BCV0*exp(stats::rnorm(ngenes,mean=0,sd=0.25)/2 )
+    BCV <- BCV0*exp(stats::rnorm(ngenes, mean=0, sd=0.25)/2)
   }
-  if(NCOL(BCV)==1) BCV <- matrix(BCV, ngenes, nlibs)
+  if(NCOL(BCV)==1){
+    BCV <- matrix(BCV, ngenes, nlibs)
+  }
+  shape_null <- 1/BCV_null^2
   shape <- 1/BCV^2
+  scale_null <- mu0_null/shape_null
   scale <- mu0/shape
-  mu <- matrix(stats::rgamma(ngenes*nlibs, shape=shape,scale=scale), ngenes, nlibs)
+  mu_null <- matrix(stats::rgamma(ngenes*nlibs, shape=shape_null, scale=scale_null), ngenes, nlibs)
+  mu <- matrix(stats::rgamma(ngenes*nlibs, shape=shape, scale=scale), ngenes, nlibs)
+  if(length(which(mu>10E8))>0){
+    mu[which(mu>10E8)] <- 10E8
+  }
 
   # Technical variation
+  counts_null <- matrix(stats::rpois(ngenes*nlibs, lambda=mu_null), ngenes, nlibs)
   counts <- matrix(stats::rpois(ngenes*nlibs, lambda=mu), ngenes, nlibs)
+
 
   # Filter
   keep <- rowSums(counts)>=10
   nkeep <- sum(keep)
   counts2 <- counts[keep,]
+  counts2_null <- counts_null[keep,]
 
-  S_temp <- stats::cor(t(counts2))
+  S_temp <- stats::cor(t(counts2_null))
   rownames(S_temp) <- as.character(1:nrow(S_temp))
   colnames(S_temp) <- as.character(1:ncol(S_temp))
+  rownames(counts2_null) <- rownames(S_temp)
   rownames(counts2) <- rownames(S_temp)
-  GS <- list()
-  for(i in 1:ncol(S_temp)){
-    GS[[i]] <-which(abs(S_temp[,1])>0.8)
-    #if(inherits(GS[[i]], "try-error")){browser()}
-    S_temp <- S_temp[-GS[[i]], -GS[[i]]]
-    if(is.null(dim(S_temp)) || nrow(S_temp)==0){
-      break()
-    }
-  }
-  gs_keep <- lapply(GS[sapply(GS, length)<maxGSsize & sapply(GS, length)>minGSsize], names)
+  #browser()
 
-  return(list("counts"=counts2, "design"=design, "gs_keep"=gs_keep, "indiv"=indiv))
+  if(do_gs){
+    GS <- list()
+    for(i in 1:ncol(S_temp)){
+      GS[[i]] <- which(abs(S_temp[,1])>0.8)
+      #if(inherits(GS[[i]], "try-error")){browser()}
+      S_temp <- S_temp[-GS[[i]], -GS[[i]]]
+      if(is.null(dim(S_temp)) || nrow(S_temp)==0){
+        break()
+      }
+    }
+    gs_keep <- lapply(GS[sapply(GS, length)<maxGSsize & sapply(GS, length)>minGSsize], names)
+  }else{
+    gs_keep <- NULL
+  }
+
+  if(mixed_hypothesis){
+    select_alt <- sample(x=1:nrow(counts2), size=floor(ngenes/10))
+    countsfin <- rbind(counts2[select_alt, ], counts2_null[!(1:nrow(counts2) %in% select_alt), ])
+  }else{
+    countsfin <- counts2
+  }
+
+  return(list("counts"=countsfin, "design"=design, "gs_keep"=gs_keep, "indiv"=indiv))
 }
 

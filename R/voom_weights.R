@@ -9,17 +9,17 @@
 #'@param x a matrix of size \code{n x p} containing the model covariates from
 #'\code{n} samples (design matrix).
 #'
-#'@param preprocessed a logical flag indicating wether the expression data have
+#'@param preprocessed a logical flag indicating whether the expression data have
 #'already been preprocessed (e.g. log2 transformed). Default is \code{FALSE}, in
 #'which case \code{y} is assumed to contain raw counts and is normalized into
 #'log(counts) per million.
 #'
-#'@param doPlot a logical flag indicating wether the mean-variance plot should be drawn.
+#'@param doPlot a logical flag indicating whether the mean-variance plot should be drawn.
 #' Default is \code{FALSE}.
 #'
 #'@param lowess_span smoother span for the lowess function, between 0 and 1. This gives
 #'the proportion of points in the plot which influence the smooth at each value.
-#'Larger values give more smoothness.
+#'Larger values give more smoothness. Default is \code{0.5}.
 #'
 #'@return a vector of length \code{n} containing the computed precision weights
 #'
@@ -106,7 +106,7 @@ voom_weights <- function(y, x, preprocessed=FALSE, doPlot=FALSE, lowess_span=0.5
     p <- (ggplot(data=plot_df)
           + geom_point(aes_string(x="r_tilde_o", y="s_rs_o"), alpha=0.45, color="grey25", size=0.5)
           + theme_bw()
-          + xlab("Gene average: log2(count size + 0.5)")
+          + xlab("Gene average")
           + ylab("sqrt(sd)")
           + ggtitle("Mean-variance")
           + geom_line(data=plot_df_lo, aes_string(x="lo.x", y="lo.y"), color="blue", lwd=1.4, lty="solid", alpha=0.8)

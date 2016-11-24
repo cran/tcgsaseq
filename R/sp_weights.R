@@ -3,21 +3,24 @@
 #'Computes precision weights that account for heteroscedasticity in RNAseq count data
 #'based on non-parametric local linear regression estimates.
 #'
-#'@param y anumeric matrix of size \code{n x G} containing the raw RNAseq counts or
+#'@param y a numeric matrix of size \code{G x n} containing the raw RNAseq counts or
 #'preprocessed expression from \code{n} samples for \code{G} genes.
 #'
 #'@param x a numeric matrix of size \code{n x p} containing the model covariates from
 #'\code{n} samples (design matrix).
 #'
-#'@param phi a numeric design matrix of size \code{n x K} containing the K basis of time.
+#'@param phi a numeric design matrix of size \code{n x K} containing the K bases of time.
 #'
-#'@param preprocessed a logical flag indicating wether the expression data have
+#'@param preprocessed a logical flag indicating whether the expression data have
 #'already been preprocessed (e.g. log2 transformed). Default is \code{FALSE}, in
 #'which case \code{y} is assumed to contain raw counts and is normalized into
 #'log(counts) per million.
 #'
-#'@param doPlot a logical flag indicating wether the mean-variance plot should be drawn.
+#'@param doPlot a logical flag indicating whether the mean-variance plot should be drawn.
 #' Default is \code{FALSE}.
+#'
+#'@param gene_based a logical flag indicating whether to estimate weights at the gene-level.
+#' Default is \code{FALSE}, when weights will be estimated at the observation-level.
 #'
 #'@param bw a character string indicating the smoothing bandwidth selection method to use. See
 #'\code{\link[stats]{bandwidth}} for details. Possible values are \code{"ucv"}, \code{"SJ"},
@@ -29,12 +32,16 @@
 #'\code{"optcosine"}. Default is \code{"gaussian"} (NB: \code{"tricube"} kernel
 #'corresponds to the loess method).
 #'
-#'@param exact a logical flag indicating wether the non-parametric weights accounting
+#'@param exact a logical flag indicating whether the non-parametric weights accounting
 #'for the mean-variance relationship should be computed exactly or extrapolated
 #'from the interpolation of local regression of the mean against the
-#'variance. Default is \code{FALSE}, which uses interporlation (faster).
+#'variance. Default is \code{FALSE}, which uses interpolation (faster).
 #'
-#'@return a vector of length \code{n} containing the computed precision weights.
+#'@param transform a logical flag indicating whether values should be transformed to uniform
+#'for the purpose of local linear smoothing. This may be helpful if tail observations are sparse and
+#'the specified bandwidth gives suboptimal performance there. Default is \code{FALSE}.
+#'
+#'@return a \code{n x G} matrix containing the computed precision weights.
 #'
 #'@seealso \code{\link[stats]{bandwidth}} \code{\link{density}}
 #'
@@ -52,14 +59,16 @@
 #'
 #'
 #'@import ggplot2
-#'@importFrom stats bw.bcv bw.nrd0 bw.nrd bw.SJ bw.ucv dnorm
+#'@importFrom stats bw.bcv bw.nrd0 bw.nrd bw.SJ bw.ucv dnorm approx
+#'@importFrom KernSmooth locpoly
 #'@export
 
 
-sp_weights <- function(x, y, phi, preprocessed=FALSE, doPlot=FALSE,
+sp_weights <- function(y, x, phi, preprocessed=FALSE, doPlot=FALSE,
+                       gene_based = FALSE,
                        bw = c("nrd", "ucv", "SJ", "nrd0", "bcv"),
                        kernel = c("gaussian", "epanechnikov", "rectangular", "triangular", "biweight", "tricube", "cosine", "optcosine"),
-                       exact=FALSE
+                       exact=FALSE, transform = FALSE
 ){
 
 
@@ -69,56 +78,58 @@ sp_weights <- function(x, y, phi, preprocessed=FALSE, doPlot=FALSE,
   stopifnot(is.matrix(x))
   stopifnot(is.matrix(phi))
 
-  g <- ncol(y) # the number of genes measured
-  n <- nrow(y) # the number of samples measured
+  g <- nrow(y) # the number of genes measured
+  n <- ncol(y) # the number of samples measured
   qq <- ncol(x) # the number of covariates
   n.t <- ncol(phi) # the number of time bases
   stopifnot(nrow(x) == n)
   stopifnot(nrow(phi) == n)
 
 
-
-
-  if(exact){
-    cat("'exact' is TRUE: the computation may take up to a couple minutes...", "\n",
-        "Set 'exact = FALSE' for quicker computation of the weights\n")
-  }
-
-  # lowess fit for predicted square root sd
-  observed <- which(colSums(y) != 0) #remving genes never observed
+  observed <- which(colSums(y) != 0) #removing genes never observed
 
   kernel <- match.arg(kernel)
   if(preprocessed){
-    y_lcpm <- y
+    y_lcpm <- t(y[,observed])
   }else{
     # transforming rna raw counts to log-counts per million (lcpm)
-    y_lcpm <- t(apply(y, MARGIN=1,function(v){log2((v+0.5)/(sum(v)+1)*10^6)}))
+    y_lcpm <- apply(y[,observed], MARGIN=1, function(v){log2((v+0.5)/(sum(v)+1)*10^6)})
   }
   rm(y)
   N <- length(y_lcpm)
   p <- ncol(y_lcpm)
-  n <- nrow(y_lcpm)
 
 
   # fitting OLS to the lcpm
-  #mu <- apply(y_lcpm, MARGIN=2, function(y){lm(y~x + phi)$fitted.values})
   xphi <- cbind(x,phi)
   B_ols <- solve(crossprod(xphi))%*%t(xphi)%*%y_lcpm
   mu <- xphi%*%B_ols
 
   sq_err <- (y_lcpm - mu)^2
   v <- colMeans(sq_err)
-
   mu_avg <- colMeans(mu)
 
-
+  if (gene_based) {
+    mu_x <- mu_avg
+  } else {
+    mu_x <- mu
+  }
+  # transforming if necessary
+  if (transform) {
+    sd_mu <- sd(mu_x)
+    mean_mu <- mean(mu_x)
+    mu_x <- pnorm((mu_x-mean_mu)/sd_mu)
+    reverse_trans <- function(x){qnorm(x)*sd_mu + mean_mu}
+  } else {
+    reverse_trans <- identity
+  }
 
   if(is.character(bw)){
     if(length(bw>1)){
         bw <- bw[1]
     }
     if (N < 2){stop("need at least 2 points to select a bandwidth automatically")}
-    if(!exact){
+    if(!exact & gene_based){
       bw <- switch(bw,
                    nrd0 = stats::bw.nrd0(as.vector(mu_avg)),
                    nrd = stats::bw.nrd(as.vector(mu_avg)),
@@ -193,40 +204,61 @@ sp_weights <- function(x, y, phi, preprocessed=FALSE, doPlot=FALSE,
   }else{
     stop("unknown kernel: 'kernel' argument must be among 'gaussian', 'rectangular', 'triangular', 'epanechnikov', 'biweight', 'cosine', 'optcosine'")
   }
-
-  w <- function(x){
-    x_ctr <- (mu_avg-x)
-    kernx <- kern_func(x_ctr, bw)
-    Sn1 <- kernx*x_ctr
-    b <- kernx*(sum(Sn1*x_ctr) - x_ctr*sum(Sn1))
-    l <- b/sum(b)
-    sum(l*v)
-  }
-
-  kern_fit <- NULL
-  if(exact){
-    weights <- t(matrix(1/unlist(lapply(as.vector(mu), w)), ncol=n, nrow=p, byrow = FALSE))
-    if(sum(!is.finite(weights))>0){
-      warning("At least 1 non finite weight. Try to increase the bandwith")
+  if (gene_based) {
+    if(exact){
+      cat("'exact' is TRUE: the computation may take up to a couple minutes...", "\n",
+          "Set 'exact = FALSE' for quicker computation of the weights\n")
     }
-  }else{
-    kern_fit <- sapply(mu_avg,w)
-    weights <- 1/matrix(kern_fit, nrow=n, ncol=p, byrow=TRUE)
-    #f_interp <- approxfun(x=mu_avg, kern_fit, rule = 2)
-    #weights <- 1/apply(mu, 2, f_interp)
+    w <- function(x){
+      x_ctr <- (mu_avg-x)
+      kernx <- kern_func(x_ctr, bw)
+      Sn1 <- kernx*x_ctr
+      b <- kernx*(sum(Sn1*x_ctr) - x_ctr*sum(Sn1))
+      l <- b/sum(b)
+      sum(l*v)
+    }
+
+    kern_fit <- NULL
+    if(exact){
+      weights <- t(matrix(1/unlist(lapply(as.vector(mu), w)), ncol=n, nrow=p, byrow = FALSE))
+      if(sum(!is.finite(weights))>0){
+        warning("At least 1 non finite weight. Try to increase the bandwith")
+      }
+    }else{
+      kern_fit <- sapply(mu_avg,w)
+      weights <- 1/matrix(kern_fit, nrow=n, ncol=p, byrow=TRUE)
+      #f_interp <- stats::approxfun(x=mu_avg, kern_fit, rule = 2)
+      #weights <- 1/apply(mu, 2, f_interp)
+    }
+    #kern_fit <- sapply(mu_avg,w)
+    #weights <- matrix(rep(1/kern_fit), ncol=ncol(y_lcpm), nrow=nrow(y_lcpm), byrow = TRUE)
+  } else {
+    smth <- KernSmooth::locpoly(x = c(mu_x), y = c(sq_err),
+                                degree = 1, kernel = kernel, bandwidth = bw)
+    w <- (1/stats::approx(reverse_trans(smth$x), smth$y, xout = mu, rule = 2)$y)
+    weights <- matrix(w, nrow(mu), ncol(mu))
   }
-  #kern_fit <- sapply(mu_avg,w)
-  #weights <- matrix(rep(1/kern_fit), ncol=ncol(y_lcpm), nrow=nrow(y_lcpm), byrow = TRUE)
+
 
   if(doPlot){
-    o <- order(mu_avg, na.last = NA)
-    plot_df <- data.frame("m_o"=mu_avg[o], "v_o"=v[o])
-    if(is.null(kern_fit)){
-      kern_fit <- sapply(mu_avg[o],w)
-    }else{
-      kern_fit <- kern_fit[o]
+    if (gene_based) {
+        o <- order(mu_avg, na.last = NA)
+      plot_df <- data.frame("m_o"=mu_avg[o], "v_o"=v[o])
+      if(is.null(kern_fit)){
+        kern_fit <- sapply(mu_avg[o],w)
+      }else{
+        kern_fit <- kern_fit[o]
+      }
+      plot_df_lo <- data.frame("lo.x"=mu_avg[o], "lo.y"=kern_fit)
+    } else {
+      inds <- sample(1:length(mu), size = 1000)
+      mu_s <- mu[inds]
+      ep_s <- sq_err[inds]
+      plot_df <- data.frame("m_o"=mu_s, "v_o"=ep_s)
+      plot_df_lo <- data.frame("lo.x"=reverse_trans(smth$x), "lo.y"=smth$y)
     }
-    plot_df_lo <- data.frame("lo.x"=mu_avg[o], "lo.y"=kern_fit)
+
+
     #plot_df_lo_temp <- data.frame("lo.x"=mu_avg[o], "lo.y"=f_interp(mu_avg[o]))
     ggp <- (ggplot(data=plot_df)
             + geom_point(aes_string(x="m_o", y="v_o"), alpha=0.45, color="grey25", size=0.5)

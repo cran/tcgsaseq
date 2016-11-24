@@ -28,9 +28,10 @@ of the \code{K} random effects on \code{phi}}
 }
 \value{
 A list with the following elements:\itemize{
-  \item \code{score}: approximation of the observed score
-  \item \code{q}: TODO
-  \item \code{q_ext}: TODO
+  \item \code{score}: approximation of the set observed score
+  \item \code{q}: observation-level contributions to the score
+  \item \code{q_ext}: psuedo-observations used to compute covariance taking into account the contributions of OLS estimates
+  \item \code{gene_scores}: approximation of the individual gene scores
 }
 }
 \description{
@@ -46,7 +47,7 @@ set.seed(123)
 n <- 100
 r <- 12
 t <- matrix(rep(1:3), 4, ncol=1, nrow=r)
-sigma <- 0.5
+sigma <- 0.4
 b0 <- 1
 
 #under the null:

@@ -4,27 +4,31 @@
 \alias{sp_weights}
 \title{Non parametric local heteroscedasticity weights}
 \usage{
-sp_weights(x, y, phi, preprocessed = FALSE, doPlot = FALSE, bw = c("nrd",
-  "ucv", "SJ", "nrd0", "bcv"), kernel = c("gaussian", "epanechnikov",
-  "rectangular", "triangular", "biweight", "tricube", "cosine", "optcosine"),
-  exact = FALSE)
+sp_weights(y, x, phi, preprocessed = FALSE, doPlot = FALSE,
+  gene_based = FALSE, bw = c("nrd", "ucv", "SJ", "nrd0", "bcv"),
+  kernel = c("gaussian", "epanechnikov", "rectangular", "triangular",
+  "biweight", "tricube", "cosine", "optcosine"), exact = FALSE,
+  transform = FALSE)
 }
 \arguments{
+\item{y}{a numeric matrix of size \code{G x n} containing the raw RNAseq counts or
+preprocessed expression from \code{n} samples for \code{G} genes.}
+
 \item{x}{a numeric matrix of size \code{n x p} containing the model covariates from
 \code{n} samples (design matrix).}
 
-\item{y}{anumeric matrix of size \code{n x G} containing the raw RNAseq counts or
-preprocessed expression from \code{n} samples for \code{G} genes.}
+\item{phi}{a numeric design matrix of size \code{n x K} containing the K bases of time.}
 
-\item{phi}{a numeric design matrix of size \code{n x K} containing the K basis of time.}
-
-\item{preprocessed}{a logical flag indicating wether the expression data have
+\item{preprocessed}{a logical flag indicating whether the expression data have
 already been preprocessed (e.g. log2 transformed). Default is \code{FALSE}, in
 which case \code{y} is assumed to contain raw counts and is normalized into
 log(counts) per million.}
 
-\item{doPlot}{a logical flag indicating wether the mean-variance plot should be drawn.
+\item{doPlot}{a logical flag indicating whether the mean-variance plot should be drawn.
 Default is \code{FALSE}.}
+
+\item{gene_based}{a logical flag indicating whether to estimate weights at the gene-level.
+Default is \code{FALSE}, when weights will be estimated at the observation-level.}
 
 \item{bw}{a character string indicating the smoothing bandwidth selection method to use. See
 \code{\link[stats]{bandwidth}} for details. Possible values are \code{"ucv"}, \code{"SJ"},
@@ -36,13 +40,17 @@ Possibilities are \code{"gaussian"}, \code{"epanechnikov"}, \code{"rectangular"}
 \code{"optcosine"}. Default is \code{"gaussian"} (NB: \code{"tricube"} kernel
 corresponds to the loess method).}
 
-\item{exact}{a logical flag indicating wether the non-parametric weights accounting
+\item{exact}{a logical flag indicating whether the non-parametric weights accounting
 for the mean-variance relationship should be computed exactly or extrapolated
 from the interpolation of local regression of the mean against the
-variance. Default is \code{FALSE}, which uses interporlation (faster).}
+variance. Default is \code{FALSE}, which uses interpolation (faster).}
+
+\item{transform}{a logical flag indicating whether values should be transformed to uniform
+for the purpose of local linear smoothing. This may be helpful if tail observations are sparse and
+the specified bandwidth gives suboptimal performance there. Default is \code{FALSE}.}
 }
 \value{
-a vector of length \code{n} containing the computed precision weights.
+a \code{n x G} matrix containing the computed precision weights.
 }
 \description{
 Computes precision weights that account for heteroscedasticity in RNAseq count data
