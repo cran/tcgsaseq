@@ -84,25 +84,38 @@ vc_test_asym <- function(y, x, indiv=rep(1,nrow(x)), phi, w, Sigma_xi = diag(nco
                            Sigma_xi = Sigma_xi)
   }
 
+  nindiv <- nrow(score_list$q_ext)
+  ng <- ncol(score_list$q_ext)
+
+  if(nindiv == 1){
+    warning("Only 1 individual: asymptotics likely not reached - Should probably run permutation test")
+    Sig_q <- matrix(1, ng, ng)
+  }else{
+    Sig_q <- cov(score_list$q_ext)
+  }
 
   if (genewise_pvals) {
-    gene_scores_obs <- score_list$gene_scores_unscaled/apply(score_list$q_ext, 2, stats::var)
-    pv <- pchisq(gene_scores_obs, df = 1, lower.tail = FALSE)
+    if (ng == 1 & nindiv > 1) {
+      gene_scores_obs <- score_list$gene_scores_unscaled/apply(score_list$q_ext, 2, stats::var)
+      pv <- stats::pchisq(gene_scores_obs, df = 1, lower.tail = FALSE)
+    }else if(ng > 1 & nindiv > 1){
+      gene_scores_obs <- score_list$gene_scores_unscaled
+      gene_lambda <- diag(Sig_q)
+      pv <- unlist(mapply(FUN=CompQuadForm::davies, q=gene_scores_obs, lambda=gene_lambda, lim=15000, acc=0.0005)["Qq",])
+    }else if(ng == 1 & nindiv == 1){
+      gene_scores_obs <- score_list$gene_scores_unscaled
+      pv <- stats::pchisq(gene_scores_obs, df = 1, lower.tail = FALSE)
+    }else if(ng > 1 & nindiv == 1){
+      gene_scores_obs <- score_list$gene_scores_unscaled
+      pv <- stats::pchisq(gene_scores_obs, df = 1, lower.tail = FALSE)
+    }else{
+      stop("no gene measured/no sample included ...")
+    }
+
     names(pv) <- rownames(y)
     ans <- list("gene_scores_obs" = gene_scores_obs, "gene_pvals" = pv)
 
   } else {
-
-    if(nrow(score_list$q_ext)<2){
-      warning("Only 1 individual: asymptotics likely not reached - Should probably run permutation test")
-      ng <- ncol(score_list$q_ext)
-      Sig_q <- matrix(1, ng, ng)
-    }else{
-      Sig_q <- cov(score_list$q_ext)
-    }
-
-    #indiv_chi <- score_list$gene_scores_unscaled/diag(Sig_q)
-    #indiv_pv <- stats::pchisq(indiv_chi, df = 1, lower.tail = FALSE)
 
     lam <- try(svd(Sig_q)$d)
     if (inherits(lam, "try-error")){

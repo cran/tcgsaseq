@@ -98,28 +98,39 @@ vc_test_perm <- function(y, x, indiv=rep(1,nrow(x)), phi, w, Sigma_xi = diag(nco
     return(res)
   }
 
-  score_list_obs <- vc_score_2use(y = y, x = x, indiv = indiv, phi = phi, w = w, Sigma_xi = Sigma_xi)
+  score_list_obs <- vc_score_2use(y = y, x = x, indiv = indiv_fact, phi = phi, w = w, Sigma_xi = Sigma_xi)
 
   if(genewise_pvals){
-    gene_scores_obs <- gene_score(score_list_obs$qq, score_list_obs$q_ext)
-    gene_scores_perm <- matrix(NA, nrow=n_genes, ncol=n_perm)
+    gene_scores_obs <- score_list_obs$gene_scores_unscaled
+
+    gene_scores_perm <- list()
     for(b in 1:n_perm){
       ## permute samples within indiv
+      ## tried to pertub genes by gene (to avoid inducing dependency between genes, doesn't change a thing)
+      # gene_scores_perm[[b]] <- sapply(1:n_genes, function(i){
+      #   perm_index <- strat_sampling(indiv_fact)
+      #   res <- vc_score_2use(y = y[i, perm_index, drop=FALSE], x = x[perm_index, , drop=FALSE],
+      #                        indiv = indiv_fact, phi = phi, w = w[i, perm_index, drop = FALSE],
+      #                        Sigma_xi = Sigma_xi)$gene_scores_unscaled
+      #   return(res)})
+
       perm_index <- strat_sampling(indiv_fact)
-      temp_list <- vc_score_2use(y[, perm_index, drop=FALSE], x[perm_index, , drop=FALSE],
-                                 indiv_fact, phi, w, Sigma_xi = Sigma_xi)
-      gene_scores_perm[, b] <- gene_score(temp_list$qq, temp_list$q_ext)
+      gene_scores_perm[[b]] <- vc_score_2use(y = y[, perm_index, drop=FALSE], x = x[perm_index, , drop=FALSE],
+                             indiv = indiv_fact, phi = phi, w = w[, perm_index, drop = FALSE],
+                             Sigma_xi = Sigma_xi)$gene_scores_unscaled
     }
-    pvals <- 1 - rowSums(apply(gene_scores_perm, 2, function(x){x < gene_scores_obs}))/n_perm
-    names(pvals) <- rownames(y)
+    #browser()
+    pvals <- 1-rowMeans(sapply(gene_scores_perm, function(x){x<gene_scores_obs}))
+    pvals2 <- 1-rowMeans(do.call(cbind, gene_scores_perm)<gene_scores_obs)
+    #hist(pvals)
     ans <- list("gene_scores_obs" = gene_scores_obs, "gene_pvals" = pvals)
   }else{
     scores_perm <- numeric(n_perm)
     for(b in 1:n_perm){
       ## permute samples within indiv
       perm_index <- strat_sampling(indiv_fact)
-      scores_perm[b] <- vc_score_2use(y[, perm_index, drop=FALSE], x[perm_index, , drop=FALSE],
-                                      indiv_fact, phi, w, Sigma_xi = Sigma_xi)$score
+      scores_perm[b] <- vc_score_2use(y = y[, perm_index, drop=FALSE], x = x[perm_index, , drop=FALSE],
+                                      indiv = indiv_fact, phi = phi, w = w[, perm_index, drop = FALSE], Sigma_xi = Sigma_xi)$score
     }
     pval <- 1-sum(scores_perm < score_list_obs$score)/n_perm
     ans <- list("set_score_obs" = score_list_obs$score, "set_pval" = pval)
