@@ -7,7 +7,7 @@
 vc_score_h(y, x, indiv, phi, w, Sigma_xi = diag(ncol(phi)))
 }
 \arguments{
-\item{y}{a numeric matrix of dim \code{g x n} containing the raw or normalized RNAseq counts for g
+\item{y}{a numeric matrix of dim \code{g x n} containing the raw or normalized RNA-seq counts for g
 genes from \code{n} samples.}
 
 \item{x}{a numeric design matrix of dim \code{n x p} containing the \code{p} covariates
@@ -30,7 +30,7 @@ of the \code{K} random effects corresponding to \code{phi}.}
 A list with the following elements:\itemize{
   \item \code{score}: approximation of the set observed score
   \item \code{q}: observation-level contributions to the score
-  \item \code{q_ext}: psuedo-observations used to compute covariance taking into account the contributions of OLS estimates
+  \item \code{q_ext}: pseudo-observations used to compute covariance taking into account the contributions of OLS estimates
   \item \code{gene_scores}: approximation of the individual gene scores
 }
 }
@@ -74,9 +74,11 @@ myw <- matrix(rnorm(nsample*ng, sd=0.1), ncol=nsample, nrow=ng)
 #run test
 score_homogen <- vc_score_h(y, x, phi=tim, indiv=myindiv,
                            w=myw, Sigma_xi=cov(tim))
+score_homogen$score
 
 score_heterogen <- vc_score(y, x, phi=tim, indiv=myindiv,
                            w=myw, Sigma_xi=cov(tim))
+score_heterogen$score
 
 scoreTest_homogen <- vc_test_asym(y, x, phi=tim, indiv=rep(1:nindiv, each=nt),
                                  w=matrix(1, ncol=ncol(y), nrow=nrow(y)), Sigma_xi=cov(tim),

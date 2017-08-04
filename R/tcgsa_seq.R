@@ -1,30 +1,38 @@
-#'Time-course Gene Set Analyis
+#'Time-course Gene Set Analysis
 #'
-#'Wrapper function for performing gene set analysis of longitudinal RNA-seq data
+#'Wrapper function for performing gene set analysis of (potentially longitudinal) RNA-seq data
 #'
 #'@param y a numeric matrix of size \code{G x n} containing the raw RNA-seq counts or
 #'preprocessed expressions from \code{n} samples for \code{G} genes.
 #'
 #'@param x a numeric matrix of size \code{n x p} containing the model covariates from
-#'\code{n} samples (design matrix).
+#'\code{n} samples (design matrix). Usually, its first column is the intercept (full of
+#'\code{1}s).
 #'
 #'@param phi a numeric design matrix of size \code{n x K} containing the \code{K} variables
 #'to be tested
 #'
+#'@param weights_phi_condi a logical flag indicating whether heteroscedasticity
+#'weights computation should be conditional on both the variable(s) to be tested
+#'\code{phi} and on covariate(s) \code{x}, or on \code{x} alone. #'Default is \code{TRUE}
+#'in which case conditional means are estimated conditionally on both \code{x} and \code{phi}.
+#'
 #'@param genesets either a vector of index or subscripts that defines which columns of \code{y}
-#'constitute the invesigated geneset. Can also be a \code{list} of index when several genesets are
+#'constitute the investigated geneset. Can also be a \code{list} of index when several gene sets are
 #'tested at once, such as the first element of a \code{\link[GSA:GSA.read.gmt]{gmt}} object.
-#'If \code{NULL}, then genewise p-values are returned.
+#'If \code{NULL}, then gene-wise p-values are returned.
 #'
 #'@param indiv a vector of length \code{n} containing the information for
 #'attributing each sample to one of the studied individuals. Coerced
-#'to be a \code{factor}.
+#'to be a \code{factor}. Default is \code{NULL} in which case each sample is considered
+#'as coming from independent subjects.
 #'
 #'@param Sigma_xi a matrix of size \code{K x K} containing the covariance matrix
-#'of the \code{K} random effects.
+#'of the \code{K} random effects. Only used if \code{homogen_traj} is \code{FALSE}.
+#'Default assume diagonal correlation matrix, i.e. independence of random effects.
 #'
 #'@param which_weights a character string indicating which method to use to estimate
-#'the mean-variance relationship wheights. Possibilities are \code{"loclin"},
+#'the mean-variance relationship weights. Possibilities are \code{"loclin"},
 #'\code{"voom"} or \code{"none"} (in which case no weighting is performed).
 #'Default is \code{"loclin"}.
 #'See \code{\link{sp_weights}} and \code{\link{voom_weights}} for details.
@@ -33,7 +41,7 @@
 #'the variance component score test, either \code{"permutation"} or \code{"asymptotic"}.
 #'Default is \code{"permutation"}.
 #'
-#'@param n_perm the number of perturbations
+#'@param n_perm the number of perturbations. Default is \code{1000}.
 #'
 #'@param preprocessed a logical flag indicating whether the expression data have
 #'already been preprocessed (e.g. log2 transformed). Default is \code{FALSE}, in
@@ -43,9 +51,9 @@
 #'@param doPlot a logical flag indicating whether the mean-variance plot should be drawn.
 #' Default is \code{FALSE}.
 #'
-#'@param gene_based a logical flag used for "loclin" weights, indicating whether to estimate
-#'weights at the gene-level. Default is \code{FALSE}, when weights will be estimated at the
-#'observation-level.
+#'@param gene_based_weights a logical flag used for \code{"loclin"} weights, indicating whether to estimate
+#'weights at the gene-level, or rather at the observation-level. Default is \code{TRUE},
+#'and weights are then estimated at the gene-level.
 #'
 #'@param bw a character string indicating the smoothing bandwidth selection method to use. See
 #'\code{\link[stats]{bandwidth}} for details. Possible values are \code{"ucv"}, \code{"SJ"},
@@ -60,15 +68,15 @@
 #'@param exact a logical flag indicating whether the non-parametric weights accounting
 #'for the mean-variance relationship should be computed exactly or extrapolated
 #'from the interpolation of local regression of the mean against the
-#'variance. Default is \code{FALSE}, which uses interporlation (faster computation).
+#'variance. Default is \code{FALSE}, which uses interpolation (faster computation).
 #'
-#'@param transform a logical flag used for "loclin" weights, indicating whether values should be
+#'@param transform a logical flag used for \code{"loclin"} weights, indicating whether values should be
 #'transformed to uniform for the purpose of local linear smoothing. This may be helpful if tail
 #'observations are sparse and the specified bandwidth gives suboptimal performance there.
 #'Default is \code{FALSE}.
 #'
 #'@param padjust_methods multiple testing correction method used if \code{genesets}
-#'is a list. Default is "BH", i.e. Benjamini-Hochberg procedure for contolling the FDR.
+#'is a list. Default is "BH", i.e. Benjamini-Hochberg procedure for controlling the FDR.
 #'Other possibilities are: \code{"holm"}, \code{"hochberg"}, \code{"hommel"},
 #'\code{"bonferroni"} or \code{"BY"} (for Benjamini-Yekutieli procedure).
 #'
@@ -80,11 +88,23 @@
 #'@param homogen_traj a logical flag indicating whether trajectories should be considered homogeneous.
 #'Default is \code{FALSE} in which case trajectories are not only tested for trend, but also for heterogeneity.
 #'
+#'@param verbose a logical flag indicating whether informative messages are printed
+#'during the computation. Default is \code{TRUE}.
+#'
 #'@return A list with the following elements:\itemize{
-#'   \item \code{which_test}:
-#'   \item \code{preprocessed}:
-#'   \item \code{n_perm}:
-#'   \item \code{pval}: associated p-value
+#'   \item \code{which_test}: a character string carrying forward the value of the '\code{which_test}' argument
+#'    indicating which test was perform (either "asymptotic" or "permutation").
+#'   \item \code{preprocessed}: a logical flag carrying forward the value of the '\code{preprocessed}' argument
+#'   indicating whether the expression data were already preprocessed, or were provided as raw counts and
+#'   transformed into log-counts per million.
+#'   \item \code{n_perm}: an integer carrying forward the value of the '\code{n_perm}' argument indicating
+#'   the number of perturbations performed (\code{NA} if asymptotic test was performed).
+#'   \item \code{genesets}: carrying forward the value of the '\code{genesets}' argument defining the gene sets
+#'   of interest (\code{NULL} for gene-wise testing).
+#'   \item \code{pval}: computed p-values. A \code{data.frame} with one raw for each each gene set, or
+#'   for each gene if \code{genesets} argument is \code{NULL}, and with 2 columns: the first one '\code{rawPval}'
+#'   contains the raw p-values, the second one '\code{adjPval}' contains the adjusted p-values (according to
+#'   the '\code{padjust_methods}' argument).
 #' }
 #'
 #'@seealso \code{\link{sp_weights}} \code{\link{vc_test_perm}} \code{\link{vc_test_asym}} \code{\link{p.adjust}}
@@ -121,27 +141,36 @@
 #'res_genes <- tcgsa_seq(y, x, phi=t, genesets=NULL,
 #'                       Sigma_xi=matrix(1), indiv=rep(1:4, each=3), which_test="asymptotic",
 #'                       which_weights="none", preprocessed=TRUE)
+#'length(res_genes$pvals[, "rawPval"])
 #'quantile(res_genes$pvals[, "rawPval"])
+#'
+#'\dontrun{
+#'res_genes <- tcgsa_seq(y, x, phi=t, genesets=NULL,
+#'                       Sigma_xi=matrix(1), indiv=rep(1:4, each=3), which_test="permutation",
+#'                       which_weights="none", preprocessed=TRUE, n_perm=100)
+#'}
 #'@export
-tcgsa_seq <- function(y, x, phi, genesets,
-                      indiv = rep(1, nrow(x)), Sigma_xi = diag(ncol(phi)),
+tcgsa_seq <- function(y, x, phi, weights_phi_condi = TRUE,
+                      genesets,
+                      indiv = NULL,
+                      Sigma_xi = diag(ncol(phi)),
                       which_test = c("permutation", "asymptotic"),
                       which_weights = c("loclin", "voom", "none"),
                       n_perm = 1000,
-                      preprocessed = FALSE, doPlot = TRUE, gene_based = FALSE,
+                      preprocessed = FALSE, doPlot = TRUE, gene_based_weights = TRUE,
                       bw = "nrd",
                       kernel = c("gaussian", "epanechnikov", "rectangular", "triangular", "biweight", "tricube", "cosine", "optcosine"),
                       exact = FALSE, transform = FALSE,
                       padjust_methods = c("BH", "BY", "holm", "hochberg", "hommel", "bonferroni"),
                       lowess_span = 0.5,
-                      homogen_traj = FALSE){
+                      homogen_traj = FALSE,
+                      verbose = TRUE){
 
 
   stopifnot(is.matrix(y))
 
   if(!preprocessed){
-    y_lcpm <- t(apply(y, MARGIN=1, function(v){log2((v+0.5)/(sum(v)+1)*10^6)}))
-    preprocessed <- TRUE
+    y_lcpm <- apply(y, MARGIN=2, function(v){log2((v+0.5)/(sum(v)+1)*10^6)})
   }else{
     y_lcpm <- y
   }
@@ -176,18 +205,14 @@ tcgsa_seq <- function(y, x, phi, genesets,
   }
   stopifnot(which_test %in% c("asymptotic", "permutation"))
 
-  if(is.null(genesets) & which_test == "permutation"){
-    stop("Gene-wise permutation test is not supported yet... But we are working on it !")
-  }
-
   w <-  switch(which_weights,
-               loclin = sp_weights(y = y_lcpm, x = x, phi=phi,
-                                   preprocessed = preprocessed, doPlot=doPlot,
-                                   gene_based = gene_based,
+               loclin = sp_weights(y = y_lcpm, x = x, phi = phi, use_phi = weights_phi_condi,
+                                   preprocessed = TRUE, doPlot = doPlot,
+                                   gene_based = gene_based_weights,
                                    bw = bw, kernel = kernel,
-                                   exact = exact, transform = transform),
-               voom = voom_weights(y = y_lcpm, x = cbind(x, phi),
-                                   preprocessed = preprocessed, doPlot = doPlot,
+                                   exact = exact, transform = transform, verbose = verbose),
+               voom = voom_weights(y = y_lcpm, x = if(weights_phi_condi){cbind(x, phi)}else{x},
+                                   preprocessed = TRUE, doPlot = doPlot,
                                    lowess_span = lowess_span),
                none = matrix(1, ncol=ncol(y_lcpm), nrow=nrow(y_lcpm))
   )
@@ -195,17 +220,33 @@ tcgsa_seq <- function(y, x, phi, genesets,
 
   if(which_test == "asymptotic"){
     n_perm <- NA
+
+    if(nrow(x) < 10)
+    warning("Less than 10 samples: asymptotics likely not reached \nYou should probably run permutation test instead...")
   }
 
-  if(is.null(genesets)){
-    cat("'genesets' argument not provided => only genewise p-values are computed\n")
 
+
+  if(is.null(genesets)){
+    if(verbose){
+      cat("'genesets' argument not provided => only gene-wise p-values are computed\n")
+    }
     if(which_test == "asymptotic"){
+      if(is.null(indiv)){
+        indiv <- 1:nrow(x)
+      }
+
       rawPvals <- vc_test_asym(y = y_lcpm, x = x, indiv = indiv, phi = phi,
                                w = w, Sigma_xi = Sigma_xi,
                                genewise_pvals = TRUE, homogen_traj = homogen_traj)$gene_pvals
     }else if(which_test == "permutation"){
-      rawPvals <- vc_test_perm(y = y_lcpm, x = x, indiv = indiv, phi = phi,
+      if(is.null(indiv)){
+        indiv <- rep(1, nrow(x))
+      }
+
+      y_lcpm_res <- y_lcpm - t(x%*%solve(crossprod(x))%*%t(x)%*%t(y_lcpm))
+      x_res <- matrix(1, nrow=nrow(x), ncol=1)
+      rawPvals <- vc_test_perm(y = y_lcpm_res, x = x_res, indiv = indiv, phi = phi,
                                w = w, Sigma_xi = Sigma_xi,
                                n_perm=n_perm, genewise_pvals = TRUE, homogen_traj = homogen_traj)$gene_pvals
     }
@@ -219,7 +260,7 @@ tcgsa_seq <- function(y, x, phi, genesets,
       gene_names_measured <- rownames(y_lcpm)
       prop_meas <- sapply(genesets, function(x){length(intersect(x, gene_names_measured))/length(x)})
       if(sum(prop_meas)!=length(prop_meas)){
-        warning("Some genes in the investigated genesets were not measured:\nremoving those genes from the geneset definition...")
+        warning("Some genes in the investigated gene sets were not measured:\nremoving those genes from the gene set  definition...")
         genesets <- lapply(genesets, function(x){x[which(x %in% gene_names_measured)]})
       }
     }else if(!is.vector(genesets)){
@@ -227,19 +268,28 @@ tcgsa_seq <- function(y, x, phi, genesets,
     }
 
     if(which_test == "asymptotic"){
-
-        rawPvals <- sapply(genesets, FUN = function(gs){
-          vc_test_asym(y = y_lcpm[gs, ], x = x, indiv = indiv, phi = phi,
-                       w = w[gs, ], Sigma_xi = Sigma_xi,
-                       genewise_pvals = FALSE, homogen_traj = homogen_traj)$set_pval}
-        )
-    } else if(which_test == "permutation"){
-        rawPvals <- sapply(genesets, FUN = function(gs){
-          vc_test_perm(y = y_lcpm[gs, ], x = x, indiv = indiv, phi = phi,
-                       w = w[gs, ], Sigma_xi = Sigma_xi,
-                       n_perm=n_perm, genewise_pvals = FALSE, homogen_traj = homogen_traj)$set_pval}
-        )
+      if(is.null(indiv)){
+        indiv <- 1:nrow(x)
       }
+
+      rawPvals <- sapply(genesets, FUN = function(gs){
+        vc_test_asym(y = y_lcpm[gs, ], x = x, indiv = indiv, phi = phi,
+                     w = w[gs, ], Sigma_xi = Sigma_xi,
+                     genewise_pvals = FALSE, homogen_traj = homogen_traj)$set_pval}
+      )
+    } else if(which_test == "permutation"){
+      if(is.null(indiv)){
+        indiv <- rep(1, nrow(x))
+      }
+
+      y_lcpm_res <- y_lcpm - t(x%*%solve(crossprod(x))%*%t(x)%*%t(y_lcpm))
+      x_res <- matrix(1, nrow=nrow(x), ncol=1)
+      rawPvals <- sapply(genesets, FUN = function(gs){
+        vc_test_perm(y = y_lcpm[gs, ], x = x, indiv = indiv, phi = phi,
+                     w = w[gs, ], Sigma_xi = Sigma_xi,
+                     n_perm=n_perm, genewise_pvals = FALSE, homogen_traj = homogen_traj)$set_pval}
+      )
+    }
 
     pvals <- data.frame("rawPval" = rawPvals, "adjPval" = stats::p.adjust(rawPvals, padjust_methods))
     if(!is.null(names(genesets))){
@@ -255,7 +305,7 @@ tcgsa_seq <- function(y, x, phi, genesets,
     if(class(genesets)=="character"){
       gene_names_measured <- rownames(y_lcpm)
       if((length(intersect(genesets, gene_names_measured))/length(x)) != 1){
-        warning("Some genes in the investigated genesets were not measured:\n removing those genes from the geneset definition...")
+        warning("Some genes in the investigated gene sets were not measured:\n removing those genes from the gene set  definition...")
         genesets <- genesets[which(genesets %in% gene_names_measured)]
       }
     }

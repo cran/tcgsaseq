@@ -5,7 +5,7 @@
 #'from \code{\link[CompQuadForm]{davies}}
 #'
 #'
-#'@param y a numeric matrix of dim \code{g x n} containing the raw or normalized RNAseq counts for g
+#'@param y a numeric matrix of dim \code{g x n} containing the raw or normalized RNA-seq counts for g
 #'genes from \code{n} samples.
 #'
 #'@param x a numeric design matrix of dim \code{n x p} containing the \code{p} covariates
@@ -24,8 +24,8 @@
 #'@param Sigma_xi a matrix of size \code{K x K} containing the covariance matrix
 #'of the \code{K} random effects corresponding to \code{phi}.
 #'
-#'@param genewise_pvals a logical flag indicating whether genewise pvalues should be returned. Default
-#'is \code{FALSE} in which case geneset p-value is computed and returned instead.
+#'@param genewise_pvals a logical flag indicating whether gene-wise p-values should be returned. Default
+#'is \code{FALSE} in which case gene set p-value is computed and returned instead.
 #'
 #'@param homogen_traj a logical flag indicating whether trajectories should be considered homogeneous.
 #'Default is \code{FALSE} in which case trajectories are not only tested for trend, but also for heterogeneity.
@@ -34,9 +34,9 @@
 #'   \item \code{set_score_obs}: the approximation of the observed set score
 #'   \item \code{set_pval}: the associated set p-value
 #' }
-#' or a list with the following elements when genewise pvalues are computed:\itemize{
-#'   \item \code{gene_scores_obs}: vector of approximating the observed genewise scores
-#'   \item \code{gene_pvals}: vector of associated genewise p-values
+#' or a list with the following elements when gene-wise p-values are computed:\itemize{
+#'   \item \code{gene_scores_obs}: vector of approximating the observed gene-wise scores
+#'   \item \code{gene_pvals}: vector of associated gene-wise p-values
 #' }
 #'
 #'
@@ -87,21 +87,15 @@ vc_test_asym <- function(y, x, indiv=rep(1,nrow(x)), phi, w, Sigma_xi = diag(nco
   nindiv <- nrow(score_list$q_ext)
   ng <- ncol(score_list$q_ext)
 
-  if(nindiv == 1){
-    warning("Only 1 individual: asymptotics likely not reached - Should probably run permutation test")
-    Sig_q <- matrix(1, ng, ng)
-  }else{
-    Sig_q <- cov(score_list$q_ext)
-  }
-
   if (genewise_pvals) {
     if (ng == 1 & nindiv > 1) {
       gene_scores_obs <- score_list$gene_scores_unscaled/apply(score_list$q_ext, 2, stats::var)
       pv <- stats::pchisq(gene_scores_obs, df = 1, lower.tail = FALSE)
     }else if(ng > 1 & nindiv > 1){
       gene_scores_obs <- score_list$gene_scores_unscaled
-      gene_lambda <- diag(Sig_q)
+      gene_lambda <- apply(X=score_list$q_ext, MARGIN=2, FUN=var)
       pv <- unlist(mapply(FUN=CompQuadForm::davies, q=gene_scores_obs, lambda=gene_lambda, lim=15000, acc=0.0005)["Qq",])
+      #pv <- stats::pchisq(gene_scores_obs/gene_lambda, df = 1, lower.tail = FALSE) # same result ? only if phi is univariate
     }else if(ng == 1 & nindiv == 1){
       gene_scores_obs <- score_list$gene_scores_unscaled
       pv <- stats::pchisq(gene_scores_obs, df = 1, lower.tail = FALSE)
@@ -116,6 +110,12 @@ vc_test_asym <- function(y, x, indiv=rep(1,nrow(x)), phi, w, Sigma_xi = diag(nco
     ans <- list("gene_scores_obs" = gene_scores_obs, "gene_pvals" = pv)
 
   } else {
+
+    if(nindiv == 1){
+      Sig_q <- matrix(1, ng, ng)
+    }else{
+      Sig_q <- cov(score_list$q_ext)
+    }
 
     lam <- try(svd(Sig_q)$d)
     if (inherits(lam, "try-error")){

@@ -5,7 +5,7 @@
 #'asymptotic approximation for small sample sizes
 #'
 #'
-#'@param y a numeric matrix of dim \code{g x n} containing the raw RNAseq counts for g
+#'@param y a numeric matrix of dim \code{g x n} containing the raw RNA-seq counts for g
 #'genes from \code{n} samples.
 #'
 #'@param x a numeric design matrix of dim \code{n x p} containing the \code{p} covariates
@@ -24,10 +24,10 @@
 #'@param Sigma_xi a matrix of size \code{K x K} containing the covariance matrix
 #'of the \code{K} random effects.
 #'
-#'@param n_perm the number of perturbations
+#'@param n_perm the number of perturbations. Default is \code{1000}.
 #'
-#'@param genewise_pvals a logical flag indicating whether genewise pvalues should be returned. Default
-#'is \code{FALSE} in which case geneset p-value is computed and returned instead.
+#'@param genewise_pvals a logical flag indicating whether gene-wise p-values should be returned. Default
+#'is \code{FALSE} in which case gene-set p-value is computed and returned instead.
 #'
 #'@param homogen_traj a logical flag indicating whether trajectories should be considered homogeneous.
 #'Default is \code{FALSE} in which case trajectories are not only tested for trend, but also for heterogeneity.
@@ -36,9 +36,9 @@
 #'   \item \code{set_score_obs}: the approximation of the observed set score
 #'   \item \code{set_pval}: the associated set p-value
 #' }
-#' or a list with the following elements when genewise pvalues are computed:\itemize{
-#'   \item \code{gene_scores_obs}: vector of approximating the observed genewise scores
-#'   \item \code{gene_pvals}: vector of associated genewise p-values
+#' or a list with the following elements when gene-wise p-values are computed:\itemize{
+#'   \item \code{gene_scores_obs}: vector of approximating the observed gene-wise scores
+#'   \item \code{gene_pvals}: vector of associated gene-wise p-values
 #' }
 #'
 #'@seealso \code{\link[CompQuadForm]{davies}}
@@ -119,9 +119,8 @@ vc_test_perm <- function(y, x, indiv=rep(1,nrow(x)), phi, w, Sigma_xi = diag(nco
                              indiv = indiv_fact, phi = phi, w = w[, perm_index, drop = FALSE],
                              Sigma_xi = Sigma_xi)$gene_scores_unscaled
     }
-    #browser()
-    pvals <- 1-rowMeans(sapply(gene_scores_perm, function(x){x<gene_scores_obs}))
-    pvals2 <- 1-rowMeans(do.call(cbind, gene_scores_perm)<gene_scores_obs)
+    #pvals <- 1 - rowMeans(sapply(gene_scores_perm, function(x){x < gene_scores_obs}))
+    pvals <- 1 - rowMeans(do.call(cbind, gene_scores_perm) < gene_scores_obs)
     #hist(pvals)
     ans <- list("gene_scores_obs" = gene_scores_obs, "gene_pvals" = pvals)
   }else{

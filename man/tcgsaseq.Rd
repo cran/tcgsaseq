@@ -4,25 +4,25 @@
 \name{tcgsaseq}
 \alias{tcgsaseq}
 \alias{tcgsaseq-package}
-\title{tcgsaseq: a package to perform Time-course Gene Set Analysis of RNA-seq data}
+\title{tcgsaseq: a package to perform Time-course Gene Set Analysis and General Gene-Wise Analysis of RNA-seq data}
 \description{
-Gene set analysis of longitudinal RNA-seq data with variance component score
-test acocunting for data heteroscedasticity through precision weights.
+Analysis of RNA-seq data with variance component score
+test accounting for data heteroscedasticity through precision weights.
 }
 \details{
 \tabular{ll}{
 Package: \tab tcgsaseq\cr
 Type: \tab Package\cr
-Version: \tab 1.4.1\cr
-Date: \tab 2017-02-21\cr
+Version: \tab 1.6.1\cr
+Date: \tab 2017-08-04\cr
 License:\tab \href{http://www.gnu.org/licenses/gpl-2.0.txt}{GPL-2}\cr
 }
-The main functions of the tcgsaseq package is \code{\link{tcgsa_seq}}
+The two main functions of the \code{tcgsaseq} package are \code{\link{varseq}} and \code{\link{tcgsa_seq}}.
 }
 \references{
 Agniel D, Hejblum BP, Variance component score test for
-time-course gene set analysis of longitudinal RNA-seq data, \emph{submitted}, 2016.
-\url{http://arxiv.org/abs/1605.02351}
+time-course gene set analysis of longitudinal RNA-seq data, \emph{Biostatistics}, 2017.
+\href{http://arxiv.org/abs/1605.02351v4}{arXiv:1605.02351} \url{https://doi.org/10.1093/biostatistics/kxx005}
 }
 \author{
 Boris P. Hejblum, Denis Agniel
