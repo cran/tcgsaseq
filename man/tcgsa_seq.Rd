@@ -12,7 +12,7 @@ tcgsa_seq(y, x, phi, weights_phi_condi = TRUE, genesets, indiv = NULL,
   "triangular", "biweight", "tricube", "cosine", "optcosine"), exact = FALSE,
   transform = FALSE, padjust_methods = c("BH", "BY", "holm", "hochberg",
   "hommel", "bonferroni"), lowess_span = 0.5, homogen_traj = FALSE,
-  verbose = TRUE)
+  na.rm_tcgsaseq = TRUE, verbose = TRUE)
 }
 \arguments{
 \item{y}{a numeric matrix of size \code{G x n} containing the raw RNA-seq counts or
@@ -31,9 +31,10 @@ weights computation should be conditional on both the variable(s) to be tested
 in which case conditional means are estimated conditionally on both \code{x} and \code{phi}.}
 
 \item{genesets}{either a vector of index or subscripts that defines which columns of \code{y}
-constitute the investigated geneset. Can also be a \code{list} of index when several gene sets are
-tested at once, such as the first element of a \code{\link[GSA:GSA.read.gmt]{gmt}} object.
-If \code{NULL}, then gene-wise p-values are returned.}
+constitute the investigated gene set (when only 1 gene set is being tested).
+Can also be a \code{list} of index (or \code{rownames} of \code{y}) when several
+gene sets are tested at once, such as the first element of a
+\code{\link[GSA:GSA.read.gmt]{gmt}} object. If \code{NULL}, then gene-wise p-values are returned.}
 
 \item{indiv}{a vector of length \code{n} containing the information for
 attributing each sample to one of the studied individuals. Coerced
@@ -101,8 +102,12 @@ Default is \code{0.5}.}
 \item{homogen_traj}{a logical flag indicating whether trajectories should be considered homogeneous.
 Default is \code{FALSE} in which case trajectories are not only tested for trend, but also for heterogeneity.}
 
-\item{verbose}{a logical flag indicating whether informative messages are printed
-during the computation. Default is \code{TRUE}.}
+\item{na.rm_tcgsaseq}{logical: should missing values in \code{y} (including
+\code{NA} and \code{NaN}) be omitted from the calculations?
+Default is \code{TRUE}.}
+
+\item{verbose}{logical: should informative messages be printed during the
+computation? Default is \code{TRUE}.}
 }
 \value{
 A list with the following elements:\itemize{
@@ -126,9 +131,12 @@ Wrapper function for performing gene set analysis of (potentially longitudinal) 
 }
 \examples{
 #rm(list=ls())
-n <- 200
-r <- 12
-t <- matrix(rep(1:3), 4, ncol=1, nrow=r)
+#res_quant <- list()
+#for(i in 1:500){
+n <- 200#0
+nr <- 3
+r <- 4*nr#100*nr
+t <- matrix(rep(1:nr), r/nr, ncol=1, nrow=r)
 sigma <- 0.4
 b0 <- 1
 
@@ -142,13 +150,19 @@ x <- matrix(1, ncol=1, nrow=r)
 
 #run test
 res <- tcgsa_seq(y, x, phi=t, genesets=lapply(0:9, function(x){x*10+(1:10)}),
-                        Sigma_xi=matrix(1), indiv=rep(1:4, each=3), which_test="asymptotic",
+                        Sigma_xi=matrix(1), indiv=rep(1:(r/nr), each=nr), which_test="asymptotic",
                         which_weights="none", preprocessed=TRUE)
-res_genes <- tcgsa_seq(y, x, phi=t, genesets=NULL,
-                      Sigma_xi=matrix(1), indiv=rep(1:4, each=3), which_test="asymptotic",
+res_genes <- tcgsa_seq(y, x, phi=cbind(t, rnorm(r)), #t^2
+                      genesets=NULL,
+                      Sigma_xi=diag(2), indiv=rep(1:(r/nr), each=nr), which_test="asymptotic",
                       which_weights="none", preprocessed=TRUE)
 length(res_genes$pvals[, "rawPval"])
 quantile(res_genes$pvals[, "rawPval"])
+#res_quant[[i]] <- res_genes$pvals[, "rawPval"]
+#}
+#round(rowMeans(sapply(res_quant, quantile)), 3)
+#plot(density(unlist(res_quant)))
+#mean(unlist(res_quant)<0.05)
 
 \dontrun{
 res_genes <- tcgsa_seq(y, x, phi=t, genesets=NULL,
@@ -157,8 +171,10 @@ res_genes <- tcgsa_seq(y, x, phi=t, genesets=NULL,
 }
 }
 \references{
-Agniel D, Hejblum BP, Variance component score test for
-time-course gene set analysis of longitudinal RNA-seq data, \emph{submitted}, 2016.
+Agniel D & Hejblum BP (2017). Variance component score test for
+time-course gene set analysis of longitudinal RNA-seq data, \emph{Biostatistics},
+18(4):589-604. \href{https://doi.org/10.1093/biostatistics/kxx005}{10.1093/biostatistics/kxx005}.
+\href{https://arxiv.org/abs/1605.02351}{arXiv:1605.02351}.
 
 Law, C. W., Chen, Y., Shi, W., & Smyth, G. K. (2014). voom: Precision
 weights unlock linear model analysis tools for RNA-seq read counts. \emph{Genome

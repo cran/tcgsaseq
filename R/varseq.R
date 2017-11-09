@@ -83,6 +83,11 @@
 #'@param homogen_traj a logical flag indicating whether trajectories should be considered homogeneous.
 #'Default is \code{FALSE} in which case trajectories are not only tested for trend, but also for heterogeneity.
 #'
+#'@param na.rm_varseq logical: should missing values in \code{y} (including
+#'\code{NA} and \code{NaN}) be omitted from the calculations?
+#'Default is \code{FALSE}.
+#'
+#'
 #'@return A list with the following elements:\itemize{
 #'   \item \code{which_test}: a character string carrying forward the value of the '\code{which_test}' argument
 #'    indicating which test was perform (either "asymptotic" or "permutation").
@@ -101,8 +106,10 @@
 #'
 #'@seealso \code{\link{sp_weights}} \code{\link{vc_test_perm}} \code{\link{vc_test_asym}} \code{\link{p.adjust}}
 #'
-#'@references Agniel D, Hejblum BP, Variance component score test for
-#'time-course gene set analysis of longitudinal RNA-seq data, \emph{submitted}, 2016.
+#'@references Agniel D & Hejblum BP (2017). Variance component score test for
+#'time-course gene set analysis of longitudinal RNA-seq data, \emph{Biostatistics},
+#'18(4):589-604. \href{https://doi.org/10.1093/biostatistics/kxx005}{10.1093/biostatistics/kxx005}.
+#'\href{https://arxiv.org/abs/1605.02351}{arXiv:1605.02351}.
 #'
 #'@examples
 #'#rm(list=ls())
@@ -145,6 +152,7 @@ varseq <- function(exprmat, covariates, variables2test,
                    exact = FALSE, transform = FALSE,
                    padjust_methods = c("BH", "BY", "holm", "hochberg", "hommel", "bonferroni"),
                    lowess_span = 0.5,
+                   na.rm_varseq = TRUE,
                    homogen_traj = FALSE){
 
   return(tcgsa_seq(y = exprmat, x = covariates, phi = variables2test,
@@ -162,6 +170,7 @@ varseq <- function(exprmat, covariates, variables2test,
                    padjust_methods = padjust_methods,
                    lowess_span = lowess_span,
                    homogen_traj = homogen_traj,
+                   na.rm_tcgsaseq = na.rm_varseq,
                    verbose = FALSE))
 
 }
