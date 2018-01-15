@@ -1,8 +1,8 @@
 Package: tcgsaseq
 Type: Package
 Title: Time-Course Gene Set Analysis for RNA-Seq Data
-Version: 1.6.3
-Date: 2017-11-09
+Version: 1.6.6
+Date: 2018-01-15
 Authors@R: c(person("Denis", "Agniel", role = c("aut"),
                     email = "denis.agniel@gmail.com"),
 	           person("Boris P.", "Hejblum", role = c("aut", "cre"),
@@ -21,9 +21,9 @@ License: GPL-2 | file LICENSE
 BugReports: https://github.com/denisagniel/tcgsaseq/issues
 RoxygenNote: 6.0.1
 NeedsCompilation: no
-Packaged: 2017-11-09 16:03:59 UTC; borishejblum
+Packaged: 2018-01-15 09:24:24 UTC; borishejblum
 Author: Denis Agniel [aut],
   Boris P. Hejblum [aut, cre]
 Maintainer: Boris P. Hejblum <boris.hejblum@u-bordeaux.fr>
 Repository: CRAN
-Date/Publication: 2017-11-09 16:11:22 UTC
+Date/Publication: 2018-01-15 09:31:54 UTC
