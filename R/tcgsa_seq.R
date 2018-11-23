@@ -108,8 +108,9 @@
 #'   of interest (\code{NULL} for gene-wise testing).
 #'   \item \code{pval}: computed p-values. A \code{data.frame} with one raw for each each gene set, or
 #'   for each gene if \code{genesets} argument is \code{NULL}, and with 2 columns: the first one '\code{rawPval}'
-#'   contains the raw p-values, the second one '\code{adjPval}' contains the adjusted p-values (according to
-#'   the '\code{padjust_methods}' argument).
+#'   contains the raw p-values, the second one contains the FDR adjusted p-values and is either named
+#'   '\code{adjPval}' (according to the '\code{padjust_methods}' argument) in the \code{asymptotic} case
+#'   or '\code{FDR}' in the \code{permutation} case.
 #' }
 #'
 #'@seealso \code{\link{sp_weights}} \code{\link{vc_test_perm}} \code{\link{vc_test_asym}} \code{\link{p.adjust}}
@@ -127,11 +128,12 @@
 #'
 #'@examples
 #'#rm(list=ls())
-#'#res_quant <- list()
-#'#for(i in 1:500){
-#'n <- 200#0
+#'nsims <- 2 #100
+#'res_quant <- list()
+#'for(i in 1:2){
+#'n <- 2000#0
 #'nr <- 3
-#'r <- 4*nr#100*nr
+#'r <- nr*20#4*nr#100*nr
 #'t <- matrix(rep(1:nr), r/nr, ncol=1, nrow=r)
 #'sigma <- 0.4
 #'b0 <- 1
@@ -148,22 +150,25 @@
 #'res <- tcgsa_seq(y, x, phi=t, genesets=lapply(0:9, function(x){x*10+(1:10)}),
 #'                         Sigma_xi=matrix(1), indiv=rep(1:(r/nr), each=nr), which_test="asymptotic",
 #'                         which_weights="none", preprocessed=TRUE)
-#'res_genes <- tcgsa_seq(y, x, phi=cbind(t, rnorm(r)), #t^2
+#'res_genes <- tcgsa_seq(y, x, phi=cbind(t),#, rnorm(r)), #t^2
 #'                       genesets=NULL,
-#'                       Sigma_xi=diag(2), indiv=rep(1:(r/nr), each=nr), which_test="asymptotic",
+#'                       Sigma_xi=diag(1), indiv=rep(1:(r/nr), each=nr), which_test="asymptotic",
 #'                       which_weights="none", preprocessed=TRUE)
 #'length(res_genes$pvals[, "rawPval"])
 #'quantile(res_genes$pvals[, "rawPval"])
-#'#res_quant[[i]] <- res_genes$pvals[, "rawPval"]
-#'#}
+#'res_quant[[i]] <- res_genes$pvals[, "rawPval"]
+#'}
 #'#round(rowMeans(sapply(res_quant, quantile)), 3)
 #'#plot(density(unlist(res_quant)))
 #'#mean(unlist(res_quant)<0.05)
 #'
 #'\dontrun{
 #'res_genes <- tcgsa_seq(y, x, phi=t, genesets=NULL,
-#'                       Sigma_xi=matrix(1), indiv=rep(1:4, each=3), which_test="permutation",
-#'                       which_weights="none", preprocessed=TRUE, n_perm=100)
+#'                       Sigma_xi=matrix(1), indiv=rep(1:(r/nr), each=nr), which_test="permutation",
+#'                       which_weights="none", preprocessed=TRUE, n_perm=1000)
+#'
+#'mean(res_genes$pvals$rawPval < 0.05)
+#'summary(res_genes$pvals$FDR)
 #'}
 #'@export
 tcgsa_seq <- function(y, x, phi, weights_phi_condi = TRUE,
@@ -184,8 +189,8 @@ tcgsa_seq <- function(y, x, phi, weights_phi_condi = TRUE,
                       verbose = TRUE){
 
   stopifnot(is.matrix(y))
-  stopifnot(is.matrix(x))
-  stopifnot(is.matrix(phi))
+  stopifnot(is.matrix(x) | is.data.frame(x))
+  stopifnot(is.matrix(phi) | is.data.frame(phi))
 
   if(sum(is.na(y))>1 & na.rm_tcgsaseq){
     warning(paste("\n\n!!!!!\n'y' contains", sum(is.na(y)), "NA values.",
@@ -211,7 +216,7 @@ tcgsa_seq <- function(y, x, phi, weights_phi_condi = TRUE,
   }
 
   if(det(crossprod(cbind(x, phi)))==0){
-    stop("crossprod(x, phi) cannot be inversed. x and phi are likely colinear...")
+    stop("crossprod(cbind(x, phi)) cannot be inversed. 'x' and 'phi' are likely colinear...")
   }
 
   if(length(padjust_methods)>1){
@@ -230,8 +235,36 @@ tcgsa_seq <- function(y, x, phi, weights_phi_condi = TRUE,
   stopifnot(which_test %in% c("asymptotic", "permutation"))
 
 
+  if(which_test == "asymptotic"){
+    n_perm <- NA
+
+    if(nrow(x) < 10)
+      warning("Less than 10 samples: asymptotics likely not reached \nYou should probably run permutation test instead...")
+  }
+
+
+
+  if(which_test == "permutation"){
+    if(is.null(indiv)){
+      options(warn = -1)
+      N_possible_perms <- factorial(ncol(y_lcpm))
+      options(warn = 0)
+    }else{
+      options(warn = -1)
+      N_possible_perms <- prod(sapply(table(indiv), factorial))
+      options(warn = 0)
+    }
+
+    if(n_perm > N_possible_perms){
+      stop(paste("The number of permutations requested 'n_perm' is larger than the total number of existing permutations", N_possible_perms,
+                 ". Try a lower number for 'n_perm'"))
+    }
+  }
+
+
+
   # Computing the weights
-  if(which_weights != "none"){cat("Computing the weights... ")}
+  if(which_weights != "none" & verbose){message("Computing the weights... ")}
   w <-  switch(which_weights,
                loclin = sp_weights(y = y_lcpm, x = x, phi = phi, use_phi = weights_phi_condi,
                                    preprocessed = TRUE, doPlot = doPlot,
@@ -247,21 +280,13 @@ tcgsa_seq <- function(y, x, phi, weights_phi_condi = TRUE,
                              )
                )
   )
-  if(which_weights != "none"){cat("Done!\n")}
+  if(which_weights != "none" & verbose){message("Done!\n")}
 
 
-
-
-  if(which_test == "asymptotic"){
-    n_perm <- NA
-
-    if(nrow(x) < 10)
-      warning("Less than 10 samples: asymptotics likely not reached \nYou should probably run permutation test instead...")
-  }
 
   if(is.null(genesets)){
     if(verbose){
-      cat("'genesets' argument not provided => only gene-wise p-values are computed\n")
+      message("'genesets' argument not provided => only gene-wise p-values are computed\n")
     }
     if(which_test == "asymptotic"){
       if(is.null(indiv)){
@@ -288,13 +313,22 @@ tcgsa_seq <- function(y, x, phi, weights_phi_condi = TRUE,
       rm(y_lcpm0)
       x_res <- matrix(1, nrow=nrow(x), ncol=1)
 
-      rawPvals <- vc_test_perm(y = y_lcpm_res, x = x_res, indiv = indiv, phi = phi,
-                               w = w, Sigma_xi = Sigma_xi,
-                               n_perm=n_perm, genewise_pvals = TRUE, homogen_traj = homogen_traj,
-                               na.rm = na.rm_tcgsaseq)$gene_pvals
+      res <- vc_test_perm(y = y_lcpm_res, x = x_res, indiv = indiv, phi = phi,
+                          w = w, Sigma_xi = Sigma_xi,
+                          n_perm=n_perm, genewise_pvals = TRUE, homogen_traj = homogen_traj,
+                          na.rm = na.rm_tcgsaseq)
+      rawPvals <- res$gene_pvals
+
+      ds_fdr <- res$fdr
     }
 
-    pvals <- data.frame("rawPval" = rawPvals, "adjPval" = stats::p.adjust(rawPvals, padjust_methods))
+    if (which_test == "permutation"){
+      pvals <- data.frame("rawPval" = rawPvals, "FDR"= ds_fdr)
+    }
+    else if (which_test == "asymptotic"){
+      pvals <- data.frame("rawPval" = rawPvals, "adjPval" = stats::p.adjust(rawPvals, padjust_methods))
+    }
+
     if(!is.null(rownames(y_lcpm))){
       rownames(pvals) <- rownames(y_lcpm)
     }
@@ -319,13 +353,13 @@ tcgsa_seq <- function(y, x, phi, weights_phi_condi = TRUE,
 
       rawPvals <- sapply(seq_along(genesets), FUN = function(i_gs){
         gs <- genesets[[i_gs]]
-        e <- try(y_lcpm[gs, 1], silent = TRUE)
-        if(inherits(e, "try-error")){
+        e <- try(y_lcpm[gs, 1, drop=FALSE], silent = TRUE)
+        if(inherits(e, "try-error") | length(e)==0){
           warning(paste("Gene set", i_gs, "contains 0 measured transcript: associated p-value cannot be computed"))
           NA
         }else{
-          vc_test_asym(y = y_lcpm[gs, ], x = x, indiv = indiv, phi = phi,
-                       w = w[gs, ], Sigma_xi = Sigma_xi,
+          vc_test_asym(y = y_lcpm[gs, , drop=FALSE], x = x, indiv = indiv, phi = phi,
+                       w = w[gs, , drop=FALSE], Sigma_xi = Sigma_xi,
                        genewise_pvals = FALSE, homogen_traj = homogen_traj,
                        na.rm = na.rm_tcgsaseq)$set_pval
         }
@@ -354,7 +388,7 @@ tcgsa_seq <- function(y, x, phi, weights_phi_condi = TRUE,
           NA
         }else{
           vc_test_perm(y = y_lcpm[gs, ], x = x, indiv = indiv, phi = phi,
-                       w = w[gs, ], Sigma_xi = Sigma_xi,
+                       w = w[gs, , drop=FALSE], Sigma_xi = Sigma_xi,
                        n_perm=n_perm, genewise_pvals = FALSE, homogen_traj = homogen_traj,
                        na.rm = na.rm_tcgsaseq)$set_pval
         }

@@ -5,13 +5,14 @@
 \title{Time-course Gene Set Analysis}
 \usage{
 tcgsa_seq(y, x, phi, weights_phi_condi = TRUE, genesets, indiv = NULL,
-  Sigma_xi = diag(ncol(phi)), which_test = c("permutation", "asymptotic"),
-  which_weights = c("loclin", "voom", "none"), n_perm = 1000,
-  preprocessed = FALSE, doPlot = TRUE, gene_based_weights = TRUE,
-  bw = "nrd", kernel = c("gaussian", "epanechnikov", "rectangular",
-  "triangular", "biweight", "tricube", "cosine", "optcosine"), exact = FALSE,
-  transform = FALSE, padjust_methods = c("BH", "BY", "holm", "hochberg",
-  "hommel", "bonferroni"), lowess_span = 0.5, homogen_traj = FALSE,
+  Sigma_xi = diag(ncol(phi)), which_test = c("permutation",
+  "asymptotic"), which_weights = c("loclin", "voom", "none"),
+  n_perm = 1000, preprocessed = FALSE, doPlot = TRUE,
+  gene_based_weights = TRUE, bw = "nrd", kernel = c("gaussian",
+  "epanechnikov", "rectangular", "triangular", "biweight", "tricube",
+  "cosine", "optcosine"), exact = FALSE, transform = FALSE,
+  padjust_methods = c("BH", "BY", "holm", "hochberg", "hommel",
+  "bonferroni"), lowess_span = 0.5, homogen_traj = FALSE,
   na.rm_tcgsaseq = TRUE, verbose = TRUE)
 }
 \arguments{
@@ -122,8 +123,9 @@ A list with the following elements:\itemize{
   of interest (\code{NULL} for gene-wise testing).
   \item \code{pval}: computed p-values. A \code{data.frame} with one raw for each each gene set, or
   for each gene if \code{genesets} argument is \code{NULL}, and with 2 columns: the first one '\code{rawPval}'
-  contains the raw p-values, the second one '\code{adjPval}' contains the adjusted p-values (according to
-  the '\code{padjust_methods}' argument).
+  contains the raw p-values, the second one contains the FDR adjusted p-values and is either named
+  '\code{adjPval}' (according to the '\code{padjust_methods}' argument) in the \code{asymptotic} case
+  or '\code{FDR}' in the \code{permutation} case.
 }
 }
 \description{
@@ -131,11 +133,12 @@ Wrapper function for performing gene set analysis of (potentially longitudinal) 
 }
 \examples{
 #rm(list=ls())
-#res_quant <- list()
-#for(i in 1:500){
-n <- 200#0
+nsims <- 2 #100
+res_quant <- list()
+for(i in 1:2){
+n <- 2000#0
 nr <- 3
-r <- 4*nr#100*nr
+r <- nr*20#4*nr#100*nr
 t <- matrix(rep(1:nr), r/nr, ncol=1, nrow=r)
 sigma <- 0.4
 b0 <- 1
@@ -152,22 +155,25 @@ x <- matrix(1, ncol=1, nrow=r)
 res <- tcgsa_seq(y, x, phi=t, genesets=lapply(0:9, function(x){x*10+(1:10)}),
                         Sigma_xi=matrix(1), indiv=rep(1:(r/nr), each=nr), which_test="asymptotic",
                         which_weights="none", preprocessed=TRUE)
-res_genes <- tcgsa_seq(y, x, phi=cbind(t, rnorm(r)), #t^2
+res_genes <- tcgsa_seq(y, x, phi=cbind(t),#, rnorm(r)), #t^2
                       genesets=NULL,
-                      Sigma_xi=diag(2), indiv=rep(1:(r/nr), each=nr), which_test="asymptotic",
+                      Sigma_xi=diag(1), indiv=rep(1:(r/nr), each=nr), which_test="asymptotic",
                       which_weights="none", preprocessed=TRUE)
 length(res_genes$pvals[, "rawPval"])
 quantile(res_genes$pvals[, "rawPval"])
-#res_quant[[i]] <- res_genes$pvals[, "rawPval"]
-#}
+res_quant[[i]] <- res_genes$pvals[, "rawPval"]
+}
 #round(rowMeans(sapply(res_quant, quantile)), 3)
 #plot(density(unlist(res_quant)))
 #mean(unlist(res_quant)<0.05)
 
 \dontrun{
 res_genes <- tcgsa_seq(y, x, phi=t, genesets=NULL,
-                      Sigma_xi=matrix(1), indiv=rep(1:4, each=3), which_test="permutation",
-                      which_weights="none", preprocessed=TRUE, n_perm=100)
+                      Sigma_xi=matrix(1), indiv=rep(1:(r/nr), each=nr), which_test="permutation",
+                      which_weights="none", preprocessed=TRUE, n_perm=1000)
+
+mean(res_genes$pvals$rawPval < 0.05)
+summary(res_genes$pvals$FDR)
 }
 }
 \references{

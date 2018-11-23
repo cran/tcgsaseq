@@ -1,6 +1,17 @@
 # News about the `tcgsaseq` R package
 
 
+### Main changes in Version 1.8.0 (2017-11-23):
+* dsFDR function for accurate discrete FDR control when using permutation test. This 
+changes the column names of the `$pvals` output when `which_test = permutations`
+
+
+### Main changes in Version 1.7.2 (2017-07-18):
+* faster permutations
+
+### Main changes in Version 1.7.1 (2017-07-07):
+* faster implementation
+
 ### Main changes in Version 1.6.5 (2017-12-24) --- *this is only a minor release*:
 * bug fix in the log2-cpm transformation computation (for `preprocessed = FALSE`) in `sp_weights`
 * bug fix in `sp_weights` when facing `NA` or `NaN`values

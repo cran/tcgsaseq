@@ -1,14 +1,16 @@
 Package: tcgsaseq
 Type: Package
 Title: Time-Course Gene Set Analysis for RNA-Seq Data
-Version: 1.6.6
-Date: 2018-01-15
+Version: 1.8.0
+Date: 2018-11-23
 Authors@R: c(person("Denis", "Agniel", role = c("aut"),
                     email = "denis.agniel@gmail.com"),
 	           person("Boris P.", "Hejblum", role = c("aut", "cre"),
-	                  email = "boris.hejblum@u-bordeaux.fr"))
+	                  email = "boris.hejblum@u-bordeaux.fr"),
+	           person("Marine", "Gauthier", role = c("aut"),
+	                  email = "marine.gauthier@u-bordeaux.fr"))
 Depends: R (>= 3.0.2)
-Imports: CompQuadForm, ggplot2, GSA, KernSmooth, stats, utils
+Imports: CompQuadForm, ggplot2, graphics, GSA, KernSmooth, stats, utils
 Suggests: limma, edgeR, DESeq2, S4Vectors, knitr, rmarkdown, testthat,
         covr
 Description: Analyze RNA-seq data with variance component score test accounting 
@@ -19,11 +21,13 @@ Description: Analyze RNA-seq data with variance component score test accounting
 LazyData: true
 License: GPL-2 | file LICENSE
 BugReports: https://github.com/denisagniel/tcgsaseq/issues
-RoxygenNote: 6.0.1
+Encoding: UTF-8
+RoxygenNote: 6.1.0
 NeedsCompilation: no
-Packaged: 2018-01-15 09:24:24 UTC; borishejblum
+Packaged: 2018-11-23 17:12:19 UTC; borishejblum
 Author: Denis Agniel [aut],
-  Boris P. Hejblum [aut, cre]
+  Boris P. Hejblum [aut, cre],
+  Marine Gauthier [aut]
 Maintainer: Boris P. Hejblum <boris.hejblum@u-bordeaux.fr>
 Repository: CRAN
-Date/Publication: 2018-01-15 09:31:54 UTC
+Date/Publication: 2018-11-23 17:40:03 UTC

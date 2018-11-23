@@ -1,8 +1,8 @@
-#'Permutation-based variance component test statistic for longitudinal RNA-seq data
+#'Permutation-based variance component test statistic
 #'
 #'This function computes an approximation of the Variance Component test for a
 #'mixture of \eqn{\chi^{2}}s using permutations. This is preferable to the
-#'asymptotic approximation for small sample sizes
+#'asymptotic approximation for small sample sizes.
 #'
 #'
 #'@param y a numeric matrix of dim \code{g x n} containing the raw RNA-seq counts for g
@@ -42,6 +42,7 @@
 #' or a list with the following elements when gene-wise p-values are computed:\itemize{
 #'   \item \code{gene_scores_obs}: vector of approximating the observed gene-wise scores
 #'   \item \code{gene_pvals}: vector of associated gene-wise p-values
+#'   \item \code{ds_fdr}: vector of associated gene-wise discrete false discovery rates
 #' }
 #'
 #'@seealso \code{\link[CompQuadForm]{davies}}
@@ -83,62 +84,29 @@ vc_test_perm <- function(y, x, indiv=rep(1,nrow(x)), phi, w, Sigma_xi = diag(nco
   if(is.null(colnames(y))){
     colnames(y) <- 1:n_samples
   }
-  n_genes <- nrow(y)
-
   indiv_fact <- factor(indiv)
 
   if(homogen_traj){
-    vc_score_2use <- vc_score_h
+    vc_score_2use <- vc_score_h_perm
   }else{
-    vc_score_2use <- vc_score
+    vc_score_2use <- vc_score_perm
   }
 
-  strat_sampling <- function(fact){
-    res <- numeric(length(fact))
-    for(l in levels(fact)){
-      original_index <- which(fact==l)
-      res[original_index] <- as.numeric(sample(as.character(original_index)))
-    }
-    return(res)
-  }
-
-  score_list_obs <- vc_score_2use(y = y, x = x, indiv = indiv_fact, phi = phi, w = w, Sigma_xi = Sigma_xi, na_rm = na.rm)
+  score_list_res <- vc_score_2use(y = y, x = x, indiv = indiv_fact, phi = phi, w = w,
+                                  Sigma_xi = Sigma_xi, na_rm = na.rm, n_perm = n_perm)
 
 
   if(genewise_pvals){
-    gene_scores_obs <- score_list_obs$gene_scores_unscaled
-
-    gene_scores_perm <- list()
-    for(b in 1:n_perm){
-      ## permute samples within indiv
-      ## tried to pertub genes by gene (to avoid inducing dependency between genes, doesn't change a thing)
-      # gene_scores_perm[[b]] <- sapply(1:n_genes, function(i){
-      #   perm_index <- strat_sampling(indiv_fact)
-      #   res <- vc_score_2use(y = y[i, perm_index, drop=FALSE], x = x[perm_index, , drop=FALSE],
-      #                        indiv = indiv_fact, phi = phi, w = w[i, perm_index, drop = FALSE],
-      #                        Sigma_xi = Sigma_xi)$gene_scores_unscaled
-      #   return(res)})
-
-      perm_index <- strat_sampling(indiv_fact)
-      gene_scores_perm[[b]] <- vc_score_2use(y = y[, perm_index, drop=FALSE], x = x[perm_index, , drop=FALSE],
-                             indiv = indiv_fact, phi = phi, w = w[, perm_index, drop = FALSE],
-                             Sigma_xi = Sigma_xi, na_rm = na.rm)$gene_scores_unscaled
-    }
+    gene_scores_obs <- score_list_res$gene_scores_unscaled
+    gene_scores_perm <- score_list_res$gene_scores_unscaled_perm
     #pvals <- 1 - rowMeans(sapply(gene_scores_perm, function(x){x < gene_scores_obs}))
-    pvals <- 1 - rowMeans(do.call(cbind, gene_scores_perm) < gene_scores_obs)
+    pvals <- 1 - rowMeans(gene_scores_perm < gene_scores_obs)
     #hist(pvals)
-    ans <- list("gene_scores_obs" = gene_scores_obs, "gene_pvals" = pvals)
+    ds_fdr <- dsFDR(gene_scores_perm, gene_scores_obs, n_perm, doPlot=FALSE, use_median=TRUE)
+    ans <- list("gene_scores_obs" = gene_scores_obs,"gene_pvals" = pvals, "fdr" = ds_fdr)
   }else{
-    scores_perm <- numeric(n_perm)
-    for(b in 1:n_perm){
-      ## permute samples within indiv
-      perm_index <- strat_sampling(indiv_fact)
-      scores_perm[b] <- vc_score_2use(y = y[, perm_index, drop=FALSE], x = x[perm_index, , drop=FALSE],
-                                      indiv = indiv_fact, phi = phi, w = w[, perm_index, drop = FALSE],
-                                      Sigma_xi = Sigma_xi, na_rm = na.rm)$score
-    }
-    pval <- 1-sum(scores_perm < score_list_obs$score)/n_perm
-    ans <- list("set_score_obs" = score_list_obs$score, "set_pval" = pval)
+    pval <- 1-sum(score_list_res$scores_perm < score_list_res$score)/n_perm
+    ans <- list("set_score_obs" = score_list_res$score, "set_pval" = pval)
   }
 
 }

@@ -27,12 +27,15 @@
 #'
 #'@param na_rm logical: should missing values (including \code{NA} and \code{NaN}) be omitted from the calculations? Default is \code{FALSE}.
 #'
+#'@param n_perm the number of permutation to perform. Default is \code{1000}.
+#'
 #'@return A list with the following elements:\itemize{
-#'   \item \code{score}: approximation of the set observed score
-#'   \item \code{q}: observation-level contributions to the score
-#'   \item \code{q_ext}: pseudo-observations used to compute covariance taking into account the contributions of OLS estimates
-#'   \item \code{gene_scores}: approximation of the individual gene scores
+#'   \item \code{score}: an approximation of the observed set score
+#'   \item \code{scores_perm}: a vector containing the permuted set scores
+#'   \item \code{gene_scores_unscaled}: approximation of the individual gene scores
+#'   \item \code{gene_scores_unscaled_perm}: a list of approximation of the permuted individual gene scores
 #' }
+#'
 #'
 #'
 #'@examples
@@ -68,12 +71,14 @@
 #'myw <- matrix(rnorm(nsample*ng, sd=0.1), ncol=nsample, nrow=ng)
 #'
 #'#run test
-#'score_homogen <- vc_score_h(y, x, phi=tim, indiv=myindiv,
-#'                            w=myw, Sigma_xi=cov(tim))
+#'#We only use few permutations (10) to keep example running time low
+#'#Otherwise one can use n_perm = 1000
+#'score_homogen <- vc_score_h_perm(y, x, phi=tim, indiv=myindiv,
+#'                                 w=myw, Sigma_xi=cov(tim), n_perm = 10)
 #'score_homogen$score
 #'
-#'score_heterogen <- vc_score(y, x, phi=tim, indiv=myindiv,
-#'                            w=myw, Sigma_xi=cov(tim))
+#'score_heterogen <- vc_score_perm(y, x, phi=tim, indiv=myindiv,
+#'                            w=myw, Sigma_xi=cov(tim), n_perm = 10)
 #'score_heterogen$score
 #'
 #'scoreTest_homogen <- vc_test_asym(y, x, phi=tim, indiv=rep(1:nindiv, each=nt),
@@ -89,7 +94,7 @@
 #'@importFrom CompQuadForm davies
 #'
 #'@export
-vc_score_h <- function(y, x, indiv, phi, w, Sigma_xi = diag(ncol(phi)), na_rm = FALSE) {
+vc_score_h_perm <- function(y, x, indiv, phi, w, Sigma_xi = diag(ncol(phi)), na_rm = FALSE, n_perm = 1000) {
 
   ## validity checks
   if(sum(!is.finite(w))>0){
@@ -125,7 +130,7 @@ vc_score_h <- function(y, x, indiv, phi, w, Sigma_xi = diag(ncol(phi)), na_rm = 
 
 
   ## data formating ------
-  indiv <- as.factor(indiv)
+  indiv <- factor(indiv, ordered=TRUE)
   nb_indiv <- length(levels(indiv))
 
   y_T <- t(y)
@@ -181,35 +186,38 @@ vc_score_h <- function(y, x, indiv, phi, w, Sigma_xi = diag(ncol(phi)), na_rm = 
   # q_ext <- q - U %*% XT
 
   sig_eps_inv_T <- t(w)
-  phi_sig_xi_sqrt <- phi%*%sig_xi_sqrt
-  T_fast <- do.call(cbind, replicate(K, sig_eps_inv_T, simplify = FALSE))*matrix(apply(phi_sig_xi_sqrt, 2, rep, g), ncol = g*K)
-  q_fast <- do.call(cbind, replicate(K, yt_mu, simplify = FALSE))*T_fast
-
   if(length(levels(indiv))>1){
     indiv_mat <- stats::model.matrix(~0 + factor(indiv))
   }else{
     indiv_mat <- matrix(as.numeric(indiv), ncol=1)
   }
-
-  if(na_rm & sum(is.na(q_fast))>0){
-    q_fast[is.na(q_fast)] <- 0
-  }
-  q <- crossprod(indiv_mat, q_fast)
-  XT_fast <- t(x)%*%T_fast/nb_indiv
   avg_xtx_inv_tx <- nb_indiv*tcrossprod(solve(crossprod(x, x)), x)
-  U_XT <- matrix(yt_mu, ncol=g*n_t, nrow=n)*crossprod(avg_xtx_inv_tx, XT_fast)
-  if(na_rm & sum(is.na(U_XT))>0){
-    U_XT[is.na(U_XT)] <- 0
+
+  compute_genewise_scores <- function(v, indiv_mat, avg_xtx_inv_tx){
+    phi_perm <- phi[v, , drop=FALSE]
+    phi_sig_xi_sqrt <- phi_perm%*%sig_xi_sqrt
+    T_fast <- do.call(cbind, replicate(K, sig_eps_inv_T, simplify = FALSE))*matrix(apply(phi_sig_xi_sqrt, 2, rep, g), ncol = g*K)
+    q_fast <- matrix(yt_mu, ncol=g*n_t, nrow=n)*T_fast
+    if(na_rm & sum(is.na(q_fast))>0){
+      q_fast[is.na(q_fast)] <- 0
+    }
+    q <- crossprod(indiv_mat, q_fast)
+    XT_fast <- t(x)%*%T_fast/nb_indiv
+    U_XT <- matrix(yt_mu, ncol=g*n_t, nrow=n)*crossprod(avg_xtx_inv_tx, XT_fast)
+    if(na_rm & sum(is.na(U_XT))>0){
+      U_XT[is.na(U_XT)] <- 0
+    }
+    U_XT_indiv <- crossprod(indiv_mat, U_XT)
+    q_ext <-  q - U_XT_indiv
+    qq <- colSums(q, na.rm = na_rm)^2/nb_indiv
+    return(rowSums(matrix(qq, ncol=K)))# genewise scores
   }
-  U_XT_indiv <- crossprod(indiv_mat, U_XT)
-  q_ext <-  q - U_XT_indiv
 
-  qq <- colSums(q, na.rm = na_rm)^2/nb_indiv
+  perm_list <- c(list(1:n), lapply(1:n_perm, function(x){as.numeric(unlist(lapply(split(x = as.character(1:n), f = indiv), FUN=sample)))}))
+  gene_Q <- sapply(perm_list, compute_genewise_scores, indiv_mat = indiv_mat, avg_xtx_inv_tx = avg_xtx_inv_tx)
+  QQ <- colSums(gene_Q)
 
-  gene_Q <- rowSums(matrix(qq, ncol=K))
-
-  QQ <- sum(qq)#nb_indiv=nrow(q) # set score
-
-  return(list("score"=QQ, "q" = q, "q_ext"=q_ext,
-              "gene_scores_unscaled" = gene_Q))
+  return(list("score" = QQ[1], "scores_perm" = QQ[-1],
+              "gene_scores_unscaled" = gene_Q[,1], "gene_scores_unscaled_perm" = gene_Q[,-1])
+  )
 }
