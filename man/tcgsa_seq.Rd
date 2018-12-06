@@ -123,9 +123,8 @@ A list with the following elements:\itemize{
   of interest (\code{NULL} for gene-wise testing).
   \item \code{pval}: computed p-values. A \code{data.frame} with one raw for each each gene set, or
   for each gene if \code{genesets} argument is \code{NULL}, and with 2 columns: the first one '\code{rawPval}'
-  contains the raw p-values, the second one contains the FDR adjusted p-values and is either named
-  '\code{adjPval}' (according to the '\code{padjust_methods}' argument) in the \code{asymptotic} case
-  or '\code{FDR}' in the \code{permutation} case.
+  contains the raw p-values, the second one contains the FDR adjusted p-values (according to
+  the '\code{padjust_methods}' argument) and is named '\code{adjPval}'.
 }
 }
 \description{

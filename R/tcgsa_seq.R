@@ -108,9 +108,8 @@
 #'   of interest (\code{NULL} for gene-wise testing).
 #'   \item \code{pval}: computed p-values. A \code{data.frame} with one raw for each each gene set, or
 #'   for each gene if \code{genesets} argument is \code{NULL}, and with 2 columns: the first one '\code{rawPval}'
-#'   contains the raw p-values, the second one contains the FDR adjusted p-values and is either named
-#'   '\code{adjPval}' (according to the '\code{padjust_methods}' argument) in the \code{asymptotic} case
-#'   or '\code{FDR}' in the \code{permutation} case.
+#'   contains the raw p-values, the second one contains the FDR adjusted p-values (according to
+#'   the '\code{padjust_methods}' argument) and is named '\code{adjPval}'.
 #' }
 #'
 #'@seealso \code{\link{sp_weights}} \code{\link{vc_test_perm}} \code{\link{vc_test_asym}} \code{\link{p.adjust}}
@@ -312,22 +311,15 @@ tcgsa_seq <- function(y, x, phi, weights_phi_condi = TRUE,
       }
       rm(y_lcpm0)
       x_res <- matrix(1, nrow=nrow(x), ncol=1)
+      perm_result <- vc_test_perm(y = y_lcpm_res, x = x_res, indiv = indiv, phi = phi,
+                                  w = w, Sigma_xi = Sigma_xi,
+                                  n_perm=n_perm, genewise_pvals = TRUE, homogen_traj = homogen_traj,
+                                  na.rm = na.rm_tcgsaseq)
+      rawPvals <- perm_result$gene_pvals
+      }
 
-      res <- vc_test_perm(y = y_lcpm_res, x = x_res, indiv = indiv, phi = phi,
-                          w = w, Sigma_xi = Sigma_xi,
-                          n_perm=n_perm, genewise_pvals = TRUE, homogen_traj = homogen_traj,
-                          na.rm = na.rm_tcgsaseq)
-      rawPvals <- res$gene_pvals
-
-      ds_fdr <- res$fdr
-    }
-
-    if (which_test == "permutation"){
-      pvals <- data.frame("rawPval" = rawPvals, "FDR"= ds_fdr)
-    }
-    else if (which_test == "asymptotic"){
       pvals <- data.frame("rawPval" = rawPvals, "adjPval" = stats::p.adjust(rawPvals, padjust_methods))
-    }
+
 
     if(!is.null(rownames(y_lcpm))){
       rownames(pvals) <- rownames(y_lcpm)

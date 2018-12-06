@@ -9,7 +9,7 @@ vc_test_perm(y, x, indiv = rep(1, nrow(x)), phi, w,
   homogen_traj = FALSE, na.rm = FALSE)
 }
 \arguments{
-\item{y}{a numeric matrix of dim \code{g x n} containing the raw RNA-seq counts for g
+\item{y}{a numeric matrix of dim \code{G x n} containing the raw RNA-seq counts for G
 genes from \code{n} samples.}
 
 \item{x}{a numeric design matrix of dim \code{n x p} containing the \code{p} covariates
@@ -53,7 +53,8 @@ or a list with the following elements when gene-wise p-values are computed:\item
 \description{
 This function computes an approximation of the Variance Component test for a
 mixture of \eqn{\chi^{2}}s using permutations. This is preferable to the
-asymptotic approximation for small sample sizes.
+asymptotic approximation for small sample sizes. We rely on exact p-values following
+Phipson and Smyth, 2010 (see References).
 }
 \examples{
 #rm(list=ls())
@@ -81,6 +82,12 @@ permTestRes <- vc_test_perm(y, x, phi=t, w=matrix(1, ncol=ncol(y), nrow=nrow(y))
                            indiv=rep(1:4, each=3), n_perm=50) #1000)
 permTestRes$set_pval
 
+}
+\references{
+Phipson B, and Smyth GK (2010). Permutation p-values should never be zero:
+calculating exact p-values when permutations are randomly drawn. \emph{Statistical Applications
+in Genetics and Molecular Biology}, Volume 9, Issue 1, Article 39.
+\url{http://www.statsci.org/smyth/pubs/PermPValuesPreprint.pdf}
 }
 \seealso{
 \code{\link[CompQuadForm]{davies}}
