@@ -4,16 +4,35 @@
 \alias{tcgsa_seq}
 \title{Time-course Gene Set Analysis}
 \usage{
-tcgsa_seq(y, x, phi, weights_phi_condi = TRUE, genesets, indiv = NULL,
-  Sigma_xi = diag(ncol(phi)), which_test = c("permutation",
-  "asymptotic"), which_weights = c("loclin", "voom", "none"),
-  n_perm = 1000, preprocessed = FALSE, doPlot = TRUE,
-  gene_based_weights = TRUE, bw = "nrd", kernel = c("gaussian",
-  "epanechnikov", "rectangular", "triangular", "biweight", "tricube",
-  "cosine", "optcosine"), exact = FALSE, transform = FALSE,
-  padjust_methods = c("BH", "BY", "holm", "hochberg", "hommel",
-  "bonferroni"), lowess_span = 0.5, homogen_traj = FALSE,
-  na.rm_tcgsaseq = TRUE, verbose = TRUE)
+tcgsa_seq(
+  y,
+  x,
+  phi,
+  weights_phi_condi = TRUE,
+  genesets,
+  indiv = NULL,
+  Sigma_xi = diag(ncol(phi)),
+  which_test = c("permutation", "asymptotic"),
+  which_weights = c("loclin", "voom", "none"),
+  n_perm = 1000,
+  progressbar = TRUE,
+  parallel_comp = TRUE,
+  nb_cores = parallel::detectCores() - 1,
+  preprocessed = FALSE,
+  doPlot = TRUE,
+  gene_based_weights = TRUE,
+  bw = "nrd",
+  kernel = c("gaussian", "epanechnikov", "rectangular", "triangular", "biweight",
+    "tricube", "cosine", "optcosine"),
+  exact = FALSE,
+  transform = TRUE,
+  padjust_methods = c("BH", "BY", "holm", "hochberg", "hommel", "bonferroni"),
+  lowess_span = 0.5,
+  R = NULL,
+  homogen_traj = FALSE,
+  na.rm_tcgsaseq = TRUE,
+  verbose = TRUE
+)
 }
 \arguments{
 \item{y}{a numeric matrix of size \code{G x n} containing the raw RNA-seq counts or
@@ -31,7 +50,7 @@ weights computation should be conditional on both the variable(s) to be tested
 \code{phi} and on covariate(s) \code{x}, or on \code{x} alone. #'Default is \code{TRUE}
 in which case conditional means are estimated conditionally on both \code{x} and \code{phi}.}
 
-\item{genesets}{either a vector of index or subscripts that defines which columns of \code{y}
+\item{genesets}{either a vector of index or subscripts that defines which rows of \code{y}
 constitute the investigated gene set (when only 1 gene set is being tested).
 Can also be a \code{list} of index (or \code{rownames} of \code{y}) when several
 gene sets are tested at once, such as the first element of a
@@ -57,6 +76,18 @@ Default is \code{"loclin"}.
 See \code{\link{sp_weights}} and \code{\link{voom_weights}} for details.}
 
 \item{n_perm}{the number of perturbations. Default is \code{1000}.}
+
+\item{progressbar}{logical indicating whether a progress bar should be displayed
+when computing permutations (only in interactive mode).}
+
+\item{parallel_comp}{a logical flag indicating whether parallel computation
+should be enabled. Only Linux and MacOS are supported, this is ignored on Windows.
+Default is \code{TRUE}.}
+
+\item{nb_cores}{an integer indicating the number of cores to be used when
+\code{parallel_comp} is \code{TRUE}.
+Only Linux and MacOS are supported, this is ignored on Windows.
+Default is \code{parallel::detectCores() - 1}.}
 
 \item{preprocessed}{a logical flag indicating whether the expression data have
 already been preprocessed (e.g. log2 transformed). Default is \code{FALSE}, in
@@ -88,7 +119,7 @@ variance. Default is \code{FALSE}, which uses interpolation (faster computation)
 \item{transform}{a logical flag used for \code{"loclin"} weights, indicating whether values should be
 transformed to uniform for the purpose of local linear smoothing. This may be helpful if tail
 observations are sparse and the specified bandwidth gives suboptimal performance there.
-Default is \code{FALSE}.}
+Default is \code{TRUE}.}
 
 \item{padjust_methods}{multiple testing correction method used if \code{genesets}
 is a list. Default is "BH", i.e. Benjamini-Hochberg procedure for controlling the FDR.
@@ -99,6 +130,9 @@ Other possibilities are: \code{"holm"}, \code{"hochberg"}, \code{"hommel"},
 the proportion of points in the plot which influence the smooth at each value.
 Larger values give more smoothness. Only used if \code{which_weights} is \code{"voom"}.
 Default is \code{0.5}.}
+
+\item{R}{library.size (optional, important to provide if \code{preprocessed = TRUE}).
+Default is \code{NULL}}
 
 \item{homogen_traj}{a logical flag indicating whether trajectories should be considered homogeneous.
 Default is \code{FALSE} in which case trajectories are not only tested for trend, but also for heterogeneity.}
@@ -169,7 +203,7 @@ res_quant[[i]] <- res_genes$pvals[, "rawPval"]
 \dontrun{
 res_genes <- tcgsa_seq(y, x, phi=t, genesets=NULL,
                       Sigma_xi=matrix(1), indiv=rep(1:(r/nr), each=nr), which_test="permutation",
-                      which_weights="none", preprocessed=TRUE, n_perm=1000)
+                      which_weights="none", preprocessed=TRUE, n_perm=1000, parallel_comp = FALSE)
 
 mean(res_genes$pvals$rawPval < 0.05)
 summary(res_genes$pvals$FDR)
